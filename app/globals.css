@@ -10885,3 +10885,61 @@ input[type="range"].nxr-ms-range::-moz-range-thumb {
     padding-bottom: 183px;
   }
 }
+
+/* ===================================================================
+   CRISTAL PINTADO POR EL DOM — solo en móvil (V18.68)
+   ===================================================================
+   En escritorio, el cristal de las tarjetas es una malla WebGL que vive en el
+   canvas y se recoloca cada frame sobre el rect de la tarjeta. En móvil ya no
+   puede serlo: desde que el scroll táctil volvió a ser del navegador (V18.67,
+   para que su barra inferior se ocultara), el compositor mueve el contenido
+   por delante de lo que ve el hilo principal, así que la malla se dibuja donde
+   la tarjeta ESTABA y el texto se despega de su cristal. No hay ajuste que lo
+   arregle —no existe forma de leer el desplazamiento que el compositor ya ha
+   aplicado—, así que en móvil el cristal se pinta sobre la PROPIA tarjeta: al
+   ser el mismo elemento, es imposible que se separen. El razonamiento completo
+   está en `cristalEnDom` (lib/calidadEscena.ts).
+
+   SIN `backdrop-filter`, Y ES DELIBERADO. Aquí el desenfoque sería la elección
+   obvia y es justo la mala: detrás de estas tarjetas hay un canvas repintando a
+   ~30fps a pantalla completa, y el compositor rehace cada capa de desenfoque en
+   cada uno de esos repintados. Con una tarjeta se aguanta; con las doce que
+   puede haber en pantalla en ZoomParallax, sale más caro que la malla que
+   acabamos de quitar (es la misma lección de ProcesoReel en V17.99 y del tope
+   de dos divs de GradualBlur). Lo que da la lectura de cristal aquí es el
+   gradiente diagonal más el filo superior iluminado, que no cuestan nada.
+
+   El fondo va al 80% y no al 42% de .nxr-card precisamente porque no hay
+   desenfoque que separe la tarjeta del muro: sin él, la opacidad tiene que
+   hacer sola todo el trabajo de legibilidad. Mismo criterio que
+   .nxr-card-solido. */
+@media (max-width: 768px) {
+  .nxr-cristal-dom,
+  .nxr-srv-inner,
+  .nxr-zp-img {
+    background:
+      linear-gradient(165deg, rgba(255, 255, 255, 0.075), rgba(255, 255, 255, 0.02) 55%),
+      rgba(12, 16, 24, 0.8);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14);
+  }
+
+  /* OJO CON CUÁL ES EL ELEMENTO EN SERVICIOS: el cristal va en `-inner`, no en
+     `-card`. La malla se anclaba al rect de `.nxr-srv-card`, pero quien recibe
+     la rotación del carrusel cada frame es `.nxr-srv-inner` (ver el gsap.set de
+     push() en Servicios.tsx, que le aplicaba a la cara exactamente el mismo
+     giro que a la malla). Pintando el fondo en la card, la cara giraría sobre
+     un rectángulo plano y quieto; pintándolo en el inner, cuerpo y contenido
+     giran como una sola pieza, que es lo que hacían antes.
+
+     Las tarjetas no llevaban radio propio —lo ponía la geometría de la malla—,
+     así que ahora lo declaran ellas. El de ZoomParallax se multiplica por su
+     factor de escala como todo lo demás dentro de esas tarjetas (ver la nota de
+     --zp-max), para que al encogerse la esquina acabe midiendo lo que debe. */
+  .nxr-srv-inner {
+    border-radius: var(--radius-lg);
+  }
+  .nxr-zp-img {
+    border-radius: calc(24px * var(--zp-max, 1));
+  }
+}

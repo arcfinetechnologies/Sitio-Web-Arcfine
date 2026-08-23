@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useRef } from "react";
 import { useTranslations } from "next-intl";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { useGSAP } from "@gsap/react";
 import { useReducedMotion } from "@/hooks/useReducedMotion";
 import { recorridoPin } from "@/lib/scrollRitmo";
+import { useVarAlturaViewport } from "@/hooks/useVarAlturaViewport";
 
 gsap.registerPlugin(ScrollTrigger);
 
@@ -241,21 +242,13 @@ export default function AutoHero() {
   const stageRef = useRef<HTMLDivElement>(null);
   const reducedMotion = useReducedMotion();
 
-  // Igual que --seo-vh / --dwh-vh: Safari y Chrome discrepan sobre 100lvh en
-  // móvil, así que la altura del stage se ancla a esta variable. Viva en
-  // resize, que es seguro porque ScrollTrigger ignora los resizes de toolbar
-  // (ignoreMobileResize en SmoothScroll).
-  useEffect(() => {
-    const set = () => document.documentElement.style.setProperty("--auto-vh", `${window.innerHeight}px`);
-    set();
-    window.addEventListener("resize", set, { passive: true });
-    return () => {
-      window.removeEventListener("resize", set);
-      // Se escribe en <html>, que PERSISTE entre rutas: sin este
-      // removeProperty seguiría viva —y congelada— en el resto del sitio.
-      document.documentElement.style.removeProperty("--auto-vh");
-    };
-  }, []);
+  // Alto del escenario. Se ancla a una variable en vez de a `100lvh` porque
+  // Safari y Chrome discrepan sobre esa unidad en móvil, pero ya NO se relee en
+  // cada `resize`: en el teléfono ese evento significa, casi siempre, que la
+  // barra del navegador se ha ocultado o mostrado al scrollear, y recalcular
+  // ahí movía todo lo que va centrado dentro del escenario. Fijo por ancho de
+  // ventana — ver lib/alturaViewport.ts.
+  useVarAlturaViewport("--auto-vh");
 
   useGSAP(
     () => {

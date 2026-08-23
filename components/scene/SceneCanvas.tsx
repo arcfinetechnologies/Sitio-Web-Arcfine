@@ -6,7 +6,7 @@ import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { Environment, Lightformer } from "@react-three/drei";
 import { EffectComposer, Bloom, Vignette } from "@react-three/postprocessing";
 import { HalfFloatType } from "three";
-import { escalaCapturaTransmision } from "@/lib/calidadEscena";
+import { escalaCapturaTransmision, cristalEnDom } from "@/lib/calidadEscena";
 import SceneBackground from "./SceneBackground";
 
 import ServiciosCardsLayer from "./ServiciosCardsLayer";
@@ -115,6 +115,10 @@ export default function SceneCanvas() {
   // re-arms per pathname so the NEW route's sections get tracked.
   const pathname = usePathname();
   const [isMobile] = useState(() => typeof window !== "undefined" && window.innerWidth < 768);
+  // Mismo criterio que usa useGlassPanels para decidir si el cristal lo pinta
+  // el DOM: se lee UNA vez, igual que isMobile, porque cambiar de rama a mitad
+  // de sesión implicaría montar o desmontar mallas con anclas ya registradas.
+  const [cristalDom] = useState(() => cristalEnDom());
   const [active, setActive] = useState(true);
   // Frameloop has THREE regimes (see the `frameloop` prop below):
   //   • tab hidden                        → "never"  (fully idle)
@@ -352,9 +356,26 @@ export default function SceneCanvas() {
           active={active}
           portrait={isPortrait}
         />
-        <ServiciosCardsLayer />
-        <ZoomParallaxCardsLayer isMobile={isMobile} />
-        <GlassPanelsLayer />
+        {/* LAS TRES CAPAS ANCLADAS AL DOM, SOLO EN ESCRITORIO (V18.68).
+            Son las únicas que se recolocan cada frame leyendo el rect de un
+            elemento del documento, y desde que el scroll táctil volvió a ser
+            del navegador (V18.67) eso ya no puede ir sincronizado en móvil:
+            el compositor mueve el contenido por delante de lo que ve el hilo
+            principal y la malla se dibuja donde la tarjeta ESTABA. En móvil el
+            cristal lo pinta la propia tarjeta con CSS, que es el mismo
+            elemento y por tanto no puede separarse de su texto. El porqué
+            completo está en `cristalEnDom` (lib/calidadEscena.ts).
+
+            Lo que queda dentro del canvas en móvil es el muro de vídeo, que
+            ocupa la pantalla entera y no va anclado a nada: no hay con qué
+            desincronizarse. */}
+        {!cristalDom && (
+          <>
+            <ServiciosCardsLayer />
+            <ZoomParallaxCardsLayer isMobile={isMobile} />
+            <GlassPanelsLayer />
+          </>
+        )}
         {!isMobile && (
           // multisampling 0 (library default: 8, then 2): MSAA on a
           // fullscreen 1.25-DPR buffer was the single most expensive setting

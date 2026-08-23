@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useRef } from "react";
 import { useTranslations } from "next-intl";
 // `Link` de i18n/navigation y NO el de next/link: este conserva el idioma
 // activo al navegar. Con el de Next, pulsar el CTA desde /en te devolvería a
@@ -10,6 +10,7 @@ import gsap from "gsap";
 import { useGSAP } from "@gsap/react";
 import { useReducedMotion } from "@/hooks/useReducedMotion";
 import { recorridoPin } from "@/lib/scrollRitmo";
+import { useVarAlturaViewport } from "@/hooks/useVarAlturaViewport";
 
 const ARROW = (
   <svg
@@ -85,20 +86,15 @@ export default function Hero() {
   // (antes vía useGlassPanels) y su caja CSS (fondo/borde/pill) — ver
   // .nxr-btn-secondary en globals.css. Queda como enlace de texto + flecha.
 
-  useEffect(() => {
-    // Mobile browsers can still have their address bar shown at the exact
-    // moment of mount, so `window.innerHeight` here may be shorter than the
-    // real, settled viewport. Without tracking resize, `.nxr-hero-stage` stays
-    // locked to that too-short height for the whole session, and its centered
-    // content ends up reading as sitting too high once the toolbar hides and
-    // reveals the extra space below. ScrollTrigger's own pin/scroll-distance
-    // math already ignores toolbar-driven resizes (`ignoreMobileResize` in
-    // SmoothScroll.tsx), so updating this CSS variable live doesn't fight it.
-    const set = () => document.documentElement.style.setProperty("--vh-100", `${window.innerHeight}px`);
-    set();
-    window.addEventListener("resize", set, { passive: true });
-    return () => window.removeEventListener("resize", set);
-  }, []);
+  // Alto del escenario del hero. ANTES se leía `window.innerHeight` y se volvía
+  // a leer en cada `resize`, y eso era el origen de dos fallos que se veían en
+  // el teléfono: el bloque se recolocaba al ocultarse o mostrarse la barra del
+  // navegador (que es lo que dispara ese `resize`), y al volver a la home desde
+  // otra página la hero aparecía a distinta altura que en la primera carga,
+  // porque el valor dependía del estado de la barra en el instante del montaje.
+  // Ahora el número es fijo por ancho de ventana y sobrevive a los cambios de
+  // ruta — ver lib/alturaViewport.ts.
+  useVarAlturaViewport("--vh-100");
 
   useGSAP(
     () => {

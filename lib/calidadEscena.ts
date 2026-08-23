@@ -49,3 +49,43 @@ export const escalaCapturaTransmision = () => (esMovilGPU() ? 0.12 : 0.35);
  * diferencia entre 1 y 2 muestras allí no se aprecia.
  */
 export const muestrasTransmision = () => (esMovilGPU() ? 1 : 2);
+
+/**
+ * ¿EL CRISTAL DE LAS TARJETAS LO PINTA EL DOM EN VEZ DE LA ESCENA 3D?
+ * ====================================================================
+ * En móvil, SÍ (V18.68). Y no es una decisión de rendimiento: es de sincronía.
+ *
+ * El problema, tal y como se ve: "cuando hago scroll el texto de la card se
+ * mueve respecto el liquid glass". Las mallas de cristal no viven en el
+ * documento — viven en un canvas `position: fixed` y se recolocan cada frame
+ * leyendo el `getBoundingClientRect()` de la tarjeta DOM que hay debajo. Eso
+ * solo se ve pegado si la posición que lee el hilo principal es la MISMA que
+ * el navegador acaba de pintar.
+ *
+ * Con el scroll táctil sincronizado (Lenis + syncTouch) lo era, porque el
+ * scroll lo movía JavaScript en ese mismo frame. Desde V18.67 el gesto táctil
+ * es del navegador —hubo que devolvérselo para que su barra inferior volviera
+ * a ocultarse— y el navegador scrollea el contenido en el compositor, por
+ * delante de lo que el hilo principal cree. Resultado: la malla se dibuja
+ * donde la tarjeta ESTABA y el contenido ya está donde toca. El texto y su
+ * cristal se separan.
+ *
+ * No hay ajuste que lo arregle: no existe forma de leer el desplazamiento que
+ * el compositor ya ha aplicado. O el scroll lo lleva JavaScript (y la barra del
+ * navegador se queda fija), o el cristal no puede ir anclado a un elemento del
+ * DOM desde fuera del documento. Se elige lo segundo.
+ *
+ * En móvil, por tanto, el cristal se pinta en la PROPIA tarjeta con CSS: al ser
+ * el mismo elemento, no hay nada que sincronizar y es imposible que se separen,
+ * pase lo que pase con el scroll. Es la misma solución que ya llevan
+ * ProcesoReel (V17.99) y las tarjetas de /precios (V18.44).
+ *
+ * De regalo, en móvil desaparece la captura de transmisión —un render extra de
+ * la escena por frame— y las tres capas dejan de leer rects. El canvas se queda
+ * solo con el muro de vídeo, que es de pantalla completa y no va anclado a
+ * ningún elemento, así que no puede desincronizarse de nada.
+ *
+ * EN ESCRITORIO NO CAMBIA NADA: allí el scroll lo suaviza Lenis con la rueda,
+ * el cristal volumétrico va clavado y se queda como está.
+ */
+export const cristalEnDom = () => esMovilGPU();

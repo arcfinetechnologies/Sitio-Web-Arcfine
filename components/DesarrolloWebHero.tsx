@@ -17,6 +17,7 @@ const HeroScene = dynamic(() => import("./dwh/HeroScene"), { ssr: false });
 import { FACETS } from "./dwh/facets";
 import { useReducedMotion } from "@/hooks/useReducedMotion";
 import { useAutoScroll } from "@/hooks/useAutoScroll";
+import { alturaViewportEstable } from "@/lib/alturaViewport";
 
 export default function DesarrolloWebHero() {
   const sectionRef = useRef<HTMLElement>(null);
@@ -62,20 +63,28 @@ export default function DesarrolloWebHero() {
       const facetPanel = q(".nxr-dwh-layers-panel")[0] as HTMLElement | undefined;
       const mobile = window.innerWidth < 768;
 
-      // The mobile `.nxr-dwh-stage` height is driven by this SAME window.innerHeight
-      // reading (see globals.css: `calc(var(--dwh-vh) - 70px)`) rather than the
-      // CSS `100lvh` unit — Safari and Chrome define/report the "large viewport"
+      // The mobile `.nxr-dwh-stage` height is driven by this SAME measurement
+      // (see globals.css: `calc(var(--dwh-vh) - 70px)`) rather than the CSS
+      // `100lvh` unit — Safari and Chrome define/report the "large viewport"
       // (toolbar-collapsed) height differently, which visibly shifted the mockup
       // + facet cards between the two. One real JS measurement, used by both the
       // stage box AND the title geometry below, keeps every mobile browser
       // pixel-consistent.
-      if (mobile) section.style.setProperty("--dwh-vh", `${window.innerHeight}px`);
+      //
+      // Ya NO es `window.innerHeight` (V18.68): esa lectura valía lo que valiera
+      // la barra del navegador en el instante del montaje, así que entrar a esta
+      // página con la barra desplegada o replegada daba dos maquetaciones
+      // distintas. `alturaViewportEstable` da el mismo número siempre para un
+      // mismo ancho de ventana — ver lib/alturaViewport.ts.
+      if (mobile) section.style.setProperty("--dwh-vh", `${alturaViewportEstable()}px`);
 
       // ---- Title-intro geometry: the headline starts BIG at mid-height.
       // On scroll it exits STRAIGHT UP off-screen (total redesign: no more
       // shrinking to a resting top-left spot) while the MacBook rises in.
       const S = mobile ? 1.25 : 1.8;
-      const vh = window.innerHeight;
+      // Misma medición estable que el alto del stage: si la geometría del
+      // titular usara innerHeight, volvería a depender de la barra.
+      const vh = alturaViewportEstable();
       const restTop = head ? parseFloat(getComputedStyle(head).top) || 44 : 44;
       const hh = head ? head.offsetHeight : 120;
       const y0 = vh / 2 - restTop - (hh * S) / 2;
