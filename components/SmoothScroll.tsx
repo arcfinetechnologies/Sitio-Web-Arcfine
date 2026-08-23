@@ -80,47 +80,59 @@ export default function SmoothScroll() {
     //   - lerp y wheelMultiplier: SIN valor propio, defaults de Lenis (0.1 y
     //     1). La rueda vuelve a responder a la primera.
     //
-    // (autoRaf false y syncTouch true son ESTRUCTURALES — ver V16.17: el rAF
-    // lo llevamos nosotros junto a ScrollTrigger.update, y sin syncTouch las
-    // cards de cristal WebGL, posicionadas por frame desde rects DOM, irían un
-    // frame por detrás del contenido en móvil.)
-    // El reel de Servicios y ZP no dependen de esto: paginan por su cuenta en
-    // touchend (glideTo con escrituras immediate que anulan la inercia de
-    // Lenis) y su muro de primera llegada clampa cualquier flick fuerte.
-    // NO se toca el cap de 1.35·vh de abajo: está co-afinado con el prólogo del
-    // reel y bajarlo rompió su entrada dos veces en teléfono real.
+    // (autoRaf false es ESTRUCTURAL — ver V16.17: el rAF lo llevamos nosotros
+    // junto a ScrollTrigger.update.)
+    //
+    // ===================================================================
+    // syncTouch: FUERA (V18.67) — el scroll táctil vuelve a ser el del sistema
+    // ===================================================================
+    // Petición: "la barra de navegación inferior no se oculta, con el resto de
+    // webs se oculta para no ocupar espacio".
+    //
+    // Y no se ocultaba por ESTO. Con syncTouch activo, Lenis se queda el gesto
+    // (preventDefault sobre touchmove) y mueve la página por programa en cada
+    // frame. Chrome y Safari repliegan su barra únicamente cuando el scroll lo
+    // produce el dedo sobre el documento; un scroll programático, por muy
+    // fluido que sea, nunca la repliega. O sea que la barra fija no era un
+    // detalle a ajustar: era la consecuencia directa de este parámetro, y la
+    // única forma de recuperarla es devolverle el gesto al navegador.
+    //
+    // Lo que se paga, para que conste antes de que alguien lo revierta:
+    //   · Las cards de cristal WebGL se colocan cada frame leyendo rects del
+    //     DOM. Con el scroll táctil sincronizado iban clavadas; con el nativo
+    //     pueden quedarse un frame por detrás en un desplazamiento rápido.
+    //   · El tope de flick que vivía aquí abajo ha desaparecido con él (ver el
+    //     bloque siguiente): la inercia táctil ya es del navegador y no hay
+    //     ningún objetivo que clampar.
+    // A cambio, además de la barra, el scroll de móvil pasa a ser el nativo del
+    // teléfono, que es más ligero que el que había.
+    //
+    // EN ESCRITORIO NO CAMBIA NADA: syncTouch solo gobierna el gesto táctil.
+    // La rueda sigue con el suavizado de Lenis y su lerp por defecto.
     const lenis = new Lenis({
       autoRaf: false,
-      syncTouch: true,
-      syncTouchLerp: 0.05,
       touchInertiaExponent: 1.7,
     });
     window.__nxrLenis = lenis;
 
-    // TOPE DE VELOCIDAD/ALCANCE POR GESTO en móvil (V16.53, petición: "que no
-    // se pueda desplazar muy rápido por las páginas"). Con exponent 1.9 la
-    // curva de inercia se dispara en flicks fuertes (|v|^1.9), así que un solo
-    // deslizamiento podía volar varias secciones. Lenis no tiene tope propio:
-    // en touchend, tras un rAF (su listener de inercia corre primero, se
-    // registra al crear la instancia), se clampa cuánto puede quedar el
-    // objetivo por delante de la posición actual. Al capar el hueco máximo se
-    // capa también la velocidad pico del planeo (v_pico ≈ hueco·lerp), que es
-    // exactamente el "tope de velocidad" pedido. El scrollTo usa el mismo
-    // syncTouchLerp (0.05) para que la cola de frenado mantenga el tacto largo
-    // de V16.52. Reintroduce el capFlickReach que existía antes de V16.17;
-    // 1.35 pantallas está co-afinado con el prólogo del reel de Servicios (ver
-    // memoria reel-geometria-validada) — la paginación del reel es inmune (sus
-    // escrituras immediate por frame sobrescriben cualquier objetivo).
-    const capFlickReach = () => {
-      requestAnimationFrame(() => {
-        const ahead = lenis.targetScroll - lenis.animatedScroll;
-        const cap = window.innerHeight * 1.35;
-        if (Math.abs(ahead) > cap) {
-          lenis.scrollTo(lenis.animatedScroll + Math.sign(ahead) * cap, { lerp: 0.05 });
-        }
-      });
-    };
-    window.addEventListener("touchend", capFlickReach, { passive: true });
+    // AQUÍ VIVÍA EL TOPE DE FLICK (V16.53 → V18.67), y conviene saber qué era
+    // antes de echarlo de menos. Petición original: "que no se pueda desplazar
+    // muy rápido por las páginas". Funcionaba porque con syncTouch la inercia
+    // táctil era de Lenis: en `touchend`, tras un rAF, se clampaba cuánto podía
+    // quedar el objetivo por delante de la posición real (tope 1.35 pantallas),
+    // y al capar ese hueco se capaba la velocidad pico del planeo.
+    //
+    // Se ha ido con syncTouch: la inercia ahora la produce el navegador, no hay
+    // ningún `targetScroll` que clampar y el mecanismo era literalmente
+    // inaplicable — no "innecesario", inaplicable. No existe forma de limitar
+    // la inercia nativa sin volver a secuestrar el gesto, que es exactamente lo
+    // que dejaba la barra del navegador clavada.
+    //
+    // CONSECUENCIA REAL A VIGILAR: un flick fuerte puede volver a recorrer más
+    // de lo que recorría, y el sitio donde más se nota es la entrada al reel de
+    // Servicios, cuyo prólogo móvil (1.35 en Servicios.tsx) se afinó CONTRA
+    // este tope. Si aparece, se corrige alargando ese prólogo, no restaurando
+    // esto.
 
     // Any ScrollTrigger created anywhere in the app (this is the only place
     // that should own a Lenis instance) needs to recompute on Lenis' own
@@ -137,7 +149,6 @@ export default function SmoothScroll() {
 
     return () => {
       cancelAnimationFrame(rafId);
-      window.removeEventListener("touchend", capFlickReach);
       delete window.__nxrLenis;
       lenis.destroy();
     };

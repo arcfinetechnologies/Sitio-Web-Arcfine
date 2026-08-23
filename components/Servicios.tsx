@@ -1180,8 +1180,8 @@ export default function Servicios() {
       // presentedFirst justo después.
       let snapGliding = false;
       // Mobile: whether the reel has already presented its first card. A
-      // hard flick from Intro carries Lenis' syncTouch inertia straight
-      // through the prologue and can OVERSHOOT past card 0 — the idle snap
+      // hard flick from Intro carries its inertia straight through the
+      // prologue and can OVERSHOOT past card 0 — the idle snap
       // then corrected to whatever card was nearest with its short ease-out,
       // which read as a stray card sweeping through before the first one
       // settled ("sale otra súper rápido y se pasa sola"). Until this flag
@@ -1189,10 +1189,12 @@ export default function Servicios() {
       // page-style glide.
       let presentedFirst = false;
       // Finger currently on screen (mobile): the first-arrival wall's soft
-      // brake must NOT re-aim Lenis while a drag is live — syncTouch sets
-      // the target to the finger position every move, and re-aiming it at
-      // card 0's centre each onUpdate makes the two targets ping-pong every
-      // frame (visible jitter). Brake only once the finger lifts.
+      // brake must NOT re-aim the scroll while a drag is live — the gesture
+      // is moving the page every touchmove, and re-aiming it at card 0's
+      // centre each onUpdate makes the two fight every frame (visible
+      // jitter). Brake only once the finger lifts. (Escrito cuando el gesto
+      // lo llevaba Lenis con syncTouch; desde V18.67 lo lleva el navegador y
+      // la conclusión es la misma: no se re-apunta con el dedo puesto.)
       let fingerDown = false;
       // `page` = mobile one-card-per-swipe pagination (touchend). Those
       // glides take over from a live finger gesture, and the default
@@ -1223,10 +1225,11 @@ export default function Servicios() {
         // After the ease completes, keep re-writing the exact target until
         // the scroll has verifiably CONVERGED (stable within 1px for a few
         // consecutive frames, up to a bounded number of holds): Lenis can
-        // still be lerping toward a stale internal target — or, with
-        // syncTouch, playing out a flick's inertia tail — and a single
-        // final write loses to it, leaving the card off centre with the
-        // caption half-crossfaded. ~1.5s of holds outlasts the tail.
+        // still be lerping toward a stale internal target — or el navegador
+        // puede estar terminando la cola de inercia de un flick táctil, que
+        // desde V18.67 es suya — y un único write final pierde contra
+        // cualquiera de las dos, dejando la card descentrada con la caption a
+        // medio cruzar. ~1,5s de holds sobrevive a la cola.
         let holdFrames = 90;
         let stableFrames = 0;
         const tick = (now: number) => {
