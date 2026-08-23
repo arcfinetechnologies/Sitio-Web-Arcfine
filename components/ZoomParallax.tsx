@@ -157,8 +157,12 @@ export default function ZoomParallax() {
 
     // ===== Entrada del texto central (V18.37: fundido con desenfoque, en su
     // posición; antes era un tecleo carácter a carácter que además empezaba
-    // con la sección aún subiendo). El texto se sigue troceando UNA vez en
-    // spans por carácter —los espacios quedan como nodos de texto para no
+    // con la sección aún subiendo. V18.66: además entra GRANDE y encoge
+    // mientras se enfoca — la frase se condensa desde el desenfoque en vez de
+    // limitarse a aparecer; el gesto completo vive en la transición CSS de
+    // .nxr-zp-hero-text, ver la nota larga en globals.css). El texto se sigue
+    // troceando UNA vez en spans por carácter —los espacios quedan como nodos
+    // de texto para no
     // alterar el word-wrap móvil— pero YA NO es para revelarlo: los spans
     // existen porque el glitch de salida corrompe letras sueltas. La entrada
     // es temporal (no scrub) y se rebobina si vuelves a subir; la SALIDA

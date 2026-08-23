@@ -8,14 +8,12 @@ import { EffectComposer, Bloom, Vignette } from "@react-three/postprocessing";
 import { HalfFloatType } from "three";
 import { escalaCapturaTransmision } from "@/lib/calidadEscena";
 import SceneBackground from "./SceneBackground";
-import GearPoints from "./GearPoints";
 
 import ServiciosCardsLayer from "./ServiciosCardsLayer";
 import ZoomParallaxCardsLayer from "./ZoomParallaxCardsLayer";
 import GlassPanelsLayer from "./GlassPanelsLayer";
 import PixelCamera, { CAMERA_DISTANCE } from "./PixelCamera";
 import { nearSections, canvasBox } from "@/store/sceneActivity";
-import { useReducedMotion } from "@/hooks/useReducedMotion";
 
 // Procedural HDRI: `<Environment>` + `<Lightformer>` only — never the
 // `preset` prop, which downloads an HDRI from drei's CDN at runtime. That
@@ -117,8 +115,6 @@ export default function SceneCanvas() {
   // re-arms per pathname so the NEW route's sections get tracked.
   const pathname = usePathname();
   const [isMobile] = useState(() => typeof window !== "undefined" && window.innerWidth < 768);
-  // Para la nube de puntos: con reduced motion se queda quieta.
-  const reducedMotion = useReducedMotion();
   const [active, setActive] = useState(true);
   // Frameloop has THREE regimes (see the `frameloop` prop below):
   //   • tab hidden                        → "never"  (fully idle)
@@ -298,18 +294,18 @@ export default function SceneCanvas() {
         // visible on either, and fill rate is this scene's dominant GPU cost
         // (fullscreen wall + transmission + bloom).
         //
-        // MÓVIL: 1 -> 2 (V17.93) -> 1.5 (V18.25). A dpr 1 el canvas se dibuja a
-        // un tercio de la resolución de un teléfono de densidad 3 y el navegador
-        // estira el resultado, así que un detalle fino como un punto de 4px
-        // llegaba convertido en una mancha; por eso se subió a 2.
+        // MÓVIL 1.5. Este número subió a 2 en su día por un motivo que YA NO
+        // EXISTE: la nitidez de la nube de puntos, que se eliminó en V18.66. Un
+        // punto de 1,8px no sobrevive a que el canvas se dibuje a un tercio de
+        // la resolución del teléfono, pero el muro de vídeo —deliberadamente
+        // pixelado— y el cristal esmerilado no tienen ese problema.
         //
-        // Baja a 1.5 porque el motivo de aquel 2 era la NITIDEZ DE LA NUBE, y la
-        // nube hoy solo se ve en el hero (V18.12). Se estaba pagando el coste en
-        // toda la web —el relleno va con el cuadrado del dpr, así que 2 son
-        // CUATRO veces los píxeles del muro a pantalla completa y 1.5 son 2,25:
-        // un 44% menos de relleno por frame en móvil— para una figura que ya no
-        // está en pantalla la mayor parte del recorrido. En el hero el punto
-        // conserva 1,9px de disco, que sigue por encima del suelo de 1,5.
+        // Se queda en 1.5 en vez de bajar más porque ahora mismo nadie se ha
+        // quejado de la nitidez y bajarlo es un cambio perceptible que nadie ha
+        // pedido. Pero es el candidato número uno si vuelve a hacer falta
+        // rendimiento en móvil: el relleno va con el CUADRADO del dpr, así que
+        // pasar de 1.5 a 1.25 quita un 30% de los píxeles del muro a pantalla
+        // completa, por frame, sin tocar ninguna geometría.
         dpr={isMobile ? [1, 1.5] : [1, 1.25]}
         camera={{ position: [0, 0, CAMERA_DISTANCE], fov: 50, near: 1, far: CAMERA_DISTANCE * 3 }}
         // antialias false on desktop too: every desktop frame goes through
@@ -356,23 +352,6 @@ export default function SceneCanvas() {
           active={active}
           portrait={isPortrait}
         />
-        {/* La nube de puntos vuelve AQUÍ DENTRO (V17.89). Tuvo canvas propio
-            durante una versión —por resolución y por fluidez— y era un error
-            de bulto: las cards de Servicios, las de ZoomParallax y los paneles
-            de cristal NO son DOM, son mallas de ESTE canvas, así que cualquier
-            canvas por delante se pone por delante de ellas. Y un canvas no se
-            puede intercalar entre el muro y las cards cuando muro y cards son
-            el mismo canvas. Estando dentro, el orden se resuelve donde debe:
-            renderOrder -5 la deja después del muro (-10) y antes de todo lo
-            demás (0), y como no escribe profundidad, cualquier card que pase
-            por delante la tapa. De regalo, entra en la captura de transmisión
-            y el cristal la refracta. */}
-        {/* SOLO EN LA HOME. La nube es el acompañamiento del hero y de las
-            frases de maestría, no un fondo del sitio entero: fuera de "/" no se
-            monta, así que ni se descarga el .bin ni se dibujan sus puntos ni
-            pide frames. El canvas persiste entre rutas, de modo que basta con
-            que deje de renderizarse para que desaparezca al navegar. */}
-        {pathname === "/" && <GearPoints isMobile={isMobile} reducedMotion={reducedMotion} />}
         <ServiciosCardsLayer />
         <ZoomParallaxCardsLayer isMobile={isMobile} />
         <GlassPanelsLayer />
@@ -423,14 +402,16 @@ export default function SceneCanvas() {
                 construye la pirámide, el radio solo decide hasta qué nivel se
                 mezcla.
 
-                luminanceThreshold SIGUE EN 0.6 Y NO SE TOCA: la nube de
-                puntos está calibrada justo por debajo (uOpacity·vBrillo pico
-                0.58) precisamente para no florecer, y devolverle el halo es
-                lo que la hacía leerse como ruido — costó varias versiones
-                quitárselo. Subir la intensidad no la afecta porque no cruza
-                el umbral; bajar el umbral sí lo haría. Si algún día hace
-                falta más emisión, se sube el brillo de lo que debe emitir,
-                nunca se baja este número. */}
+                luminanceThreshold 0.6: por debajo quedan el muro —que está
+                deliberadamente oscuro y ni se acerca— y el cuerpo del
+                cristal; por encima, solo sus cantos. Es lo que hace que
+                florezca el filo y no la superficie entera. (Este umbral
+                estuvo además atado a la nube de puntos, calibrada justo por
+                debajo para no florecer; la nube se eliminó en V18.66 y esa
+                atadura ya no existe, pero el valor sigue siendo el correcto
+                por lo de arriba.) Si algún día hace falta más emisión, se
+                sube el brillo de lo que debe emitir antes que bajar esto:
+                bajarlo mete al muro en la ecuación. */}
             <Bloom
               mipmapBlur
               resolutionScale={0.5}

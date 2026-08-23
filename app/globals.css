@@ -1831,9 +1831,9 @@ p.nxr-hero-mastery-line {
 /* En BLANCO, y solo el de la hero (V18.02). Las piezas se comparten con el
    .nxr-scrollcue de /desarrollo-web y /agentes-ia, donde van en una esquina
    sobre fondo despejado y con 0.42/0.55 de blanco se leen de sobra. Aquí el
-   indicador cae en mitad del hero, con el muro de vídeo y la nube de puntos
-   por detrás, y a esa opacidad se perdía. Se sube solo en este contexto para
-   no tocar las otras dos páginas. */
+   indicador cae en mitad del hero, con el muro de vídeo por detrás, y a esa
+   opacidad se perdía. Se sube solo en este contexto para no tocar las otras
+   dos páginas. */
 .nxr-hero-cue .nxr-scrollcue-wheel {
   border-color: rgba(255, 255, 255, 0.85);
 }
@@ -1935,8 +1935,7 @@ p.nxr-hero-mastery-line {
   .nxr-hero-fade,
   .nxr-hero-static {
     /* ESTE es el único sitio que decide dónde cae el bloque del hero en
-       teléfono. POSICIÓN ELEGIDA Y CERRADA (V18.34): centrado exacto. No la
-       muevas si no se pide explícitamente y con un destino concreto.
+       teléfono. No lo muevas si no se pide explícitamente.
 
        El contenido va centrado por flex dentro de `inset: 0`, así que lo que
        lo desplaza es la ASIMETRÍA entre estos dos paddings: medio diferencial,
@@ -1953,16 +1952,30 @@ p.nxr-hero-mastery-line {
         · V18.31 invirtió la asimetría aquí (0 / 8vh) → ~32px POR ENCIMA del
           centro: demasiado arriba.
         · V18.32 revirtió a 120/0 → otra vez demasiado abajo.
-       Los dos extremos quedaron descartados y el centro es el punto elegido
-       entre ellos.
+       Los dos extremos quedaron descartados.
+        · V18.66 (petición: "que todo el texto e indicador de desliza estén un
+          poco más arriba"): 48px de padding inferior = el bloque ENTERO sube
+          24px. Sube todo junto —titular, párrafo, CTA e indicador—, que es lo
+          que se pidió; no es la vía compensada de abajo, que mueve solo el
+          indicador. 24px es deliberadamente la mitad del salto que en V18.31
+          resultó excesivo (8vh ≈ 30px de subida): el centro exacto se quedaba
+          bajo y el extremo de arriba se pasaba, así que este es el punto medio
+          entre los dos.
 
        Si alguna vez hay que subir SOLO el indicador sin mover el resto, la vía
        es compensada, no global: recortar el `margin-top` de .nxr-hero-cue en
-       X px y añadir aquí `padding-bottom: X px`, que devuelve el centrado a su
-       sitio y deja el indicador X px más arriba. */
+       X px y sumar X px a este `padding-bottom`, que devuelve el bloque a
+       donde estaba y deja el indicador X px más arriba. */
     padding-top: 0;
-    padding-bottom: 0;
+    padding-bottom: 48px;
   }
+
+  /* Los heros de /seo y /automatizaciones reservan a mano el hueco del CTA y
+     el indicador para que su h1 case con el de aquí, así que ese número es un
+     DERIVADO de este padding: si cambia este, cambia aquel. Vive al FINAL del
+     archivo —no aquí— porque tiene que ganar por orden a las declaraciones
+     base de sus dos secciones, que están más abajo. Busca
+     "HEROS DE SERVICIO ALINEADOS CON LA HOME". */
 
   /* "Construido con maestría / Entregado con precisión" pinned to the middle
      of the SMALL viewport height: the stage is 100lvh-tracked (--vh-100), so
@@ -5852,13 +5865,53 @@ input[type="range"].nxr-ms-range::-moz-range-thumb {
 
    La clase la pone el JS al montar, así que sin JS o con reduced motion el
    texto queda plano y visible sin depender de que nadie se la quite. */
+/* ENTRADA DE LA FRASE CENTRAL — se materializa desde un desenfoque, GRANDE, y
+   encoge hasta su tamaño al enfocarse (V18.66).
+   ==================================================================
+   Las tres propiedades corren en la MISMA transición y la misma curva, que es
+   lo que hace que se lea como un solo gesto —la frase se condensa— y no como
+   tres efectos sumados: mientras el desenfoque se va, la escala baja y la
+   opacidad sube, todo en 0,55s.
+
+   POR QUÉ SOLO ES CSS Y NO UNA ANIMACIÓN CON SCRUB. Es la pregunta importante
+   aquí, porque la petición era "de la manera más eficiente y optimizada
+   posible" y la tentación es atar esto al scroll como el resto de la sección.
+   No:
+     · Atado al scroll, la velocidad del efecto la decide el dedo. Un flick lo
+       atraviesa en dos frames (nadie ve nada) y un scroll lento lo deja
+       congelado a medias, con la frase permanentemente borrosa. Es el mismo
+       fallo que ya obligó a retirar el suavizado del sticky de esta sección:
+       lo que se percibe aquí es TIEMPO, no distancia recorrida.
+     · Una transición de CSS la ejecuta el compositor sin pasar por JavaScript:
+       cero trabajo en el hilo principal por frame, en una sección que ya
+       reposiciona siete cards y sus mallas WebGL en cada scroll.
+   El disparo sigue siendo del scroll (ZoomParallax.tsx conmuta la clase
+   cuando la sección toca su tope) — lo que no depende del scroll es la
+   REPRODUCCIÓN.
+
+   `transform` y `opacity` no cuestan repintado; `filter` sí, pero se paga
+   sobre todo al principio, cuando la frase está casi transparente. Los
+   caracteres van en spans (los necesita el glitch de salida) y el efecto se
+   aplica al CONTENEDOR a propósito: un elemento animado en vez de treinta.
+
+   EL TECHO DE LA ESCALA LO PONE EL RECORTE DE LA CARD, no el gusto:
+   `.nxr-zp-img` lleva `overflow: hidden`, así que una frase que se pase de
+   ancho entra CORTADA por los bordes, que es justo el frame que más se mira.
+   Medido en la card central: en escritorio la línea más larga ocupa 549px de
+   los 952px útiles, o sea que cabría hasta 1.73; en móvil el texto reparte en
+   varias líneas dentro de una caja mucho más ancha que ellas, y da todavía
+   más margen. 1.25 deja holgura de sobra en los dos extremos del rango y es
+   un agrandamiento que se ve. Si algún día la frase se alarga o pierde su
+   salto de línea, hay que volver a medir y bajar esto. */
 .nxr-zp-hero-text {
   transition: opacity 0.55s cubic-bezier(0.22, 1, 0.36, 1),
-    filter 0.55s cubic-bezier(0.22, 1, 0.36, 1);
+    filter 0.55s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 0.55s cubic-bezier(0.22, 1, 0.36, 1);
 }
 .nxr-zp-hero-text.nxr-zp-oculto {
   opacity: 0;
   filter: blur(14px);
+  transform: scale(1.25);
 }
 .nxr-zp-card svg {
   width: calc(40px * var(--zp-max, 1));
@@ -10801,5 +10854,34 @@ input[type="range"].nxr-ms-range::-moz-range-thumb {
   }
   .nxr-auto-node-txt b {
     font-size: 8.5px;
+  }
+}
+
+/* ===================================================================
+   HEROS DE SERVICIO ALINEADOS CON LA HOME — en móvil (V18.66)
+   ===================================================================
+   /seo y /automatizaciones no llevan CTA ni indicador de deslizar debajo del
+   titular, así que sus cabeceras reservan a mano el hueco que esas dos piezas
+   ocupan dentro del bloque centrado de la home (135px medidos). Con eso, el h1
+   cae exactamente a la misma altura en las tres páginas y no se ve ningún
+   salto al navegar entre ellas.
+
+   Ese 135 es un DERIVADO del padding inferior del hero de la home, no un valor
+   independiente: en V18.66 la home subió 24px (padding-bottom 0 → 48), así que
+   aquí toca sumar los mismos 48 → 183. Si vuelve a moverse allí, se mueve
+   aquí; son un solo número escrito en dos sitios.
+
+   POR QUÉ ESTÁ AL FINAL DEL ARCHIVO Y NO JUNTO A LA REGLA DE LA HOME, que es
+   donde se leería mejor: porque `.nxr-seo-head` y `.nxr-auto-head` declaran su
+   propio `padding-bottom: 135px` en sus secciones (líneas ~8180 y ~10450) con
+   la MISMA especificidad que esto, y las media queries no aportan
+   especificidad ninguna. Puesto arriba, la declaración base de más abajo
+   ganaría por orden y este bloque no haría absolutamente nada — que es
+   exactamente lo que le pasó a V18.29 intentando mover el hero de la home
+   desde una media query anterior en el archivo. */
+@media (max-width: 768px) {
+  .nxr-seo-head,
+  .nxr-auto-head {
+    padding-bottom: 183px;
   }
 }

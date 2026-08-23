@@ -19,7 +19,7 @@ export const config = {
   /**
    * Todo menos lo que no es una página: los bundles (`_next`), `_vercel`, la
    * API y cualquier ruta con punto, que son los archivos de public/ (los
-   * vídeos del muro, gear-points.bin, los favicons). Reescribir un .mp4 a
+   * vídeos del muro, las capturas, los favicons). Reescribir un .mp4 a
    * /es/algo.mp4 lo rompería.
    *
    * CUIDADO CON LA BARRA DOBLE de `\\.`: esto es un string de TypeScript, así
