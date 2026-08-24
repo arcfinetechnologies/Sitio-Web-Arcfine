@@ -5796,13 +5796,6 @@ input[type="range"].nxr-ms-range::-moz-range-thumb {
   position: relative;
 }
 
-/* Slice clones for the centre card's mobile glitch-death: hidden everywhere
-   (desktop included) except while ZoomParallax.tsx flags the anchor with
-   .nxr-zp-glitching — see the mobile rules in this file's ZP media block. */
-.nxr-zp-glslice {
-  display: none;
-}
-
 /* ===== Typewriter por carácter — COMPARTIDO POR TRES COMPONENTES =====
    OJO AL NOMBRE: el prefijo `zp-` es histórico (nació en ZoomParallax) pero
    estas clases las usan también el TITULAR DEL HERO de la home (Hero.tsx, sus
@@ -5851,17 +5844,18 @@ input[type="range"].nxr-ms-range::-moz-range-thumb {
   }
 }
 
-/* Entrada del texto central de ZoomParallax (V18.37). Antes se tecleaba con
-   las clases de arriba; ahora aparece QUIETO en su posición definitiva con un
-   fundido y desenfoque —"que aparezca en su posición central con un
-   difuminado, no saliendo desde abajo"—, disparado cuando la sección ya ha
-   tocado su tope (ver twGate en ZoomParallax.tsx).
+/* Entrada Y SALIDA del texto central de ZoomParallax (V18.37; simétricas desde
+   V18.69). Aparece QUIETO en su posición definitiva con un fundido y
+   desenfoque —"que aparezca en su posición central con un difuminado, no
+   saliendo desde abajo"— y se va exactamente por el mismo camino y en el mismo
+   sitio, disparado desde el mismo umbral en las dos direcciones (ver la ventana
+   de visibilidad en ZoomParallax.tsx). Bajando y subiendo se ve lo mismo, y la
+   primera carga se comporta igual que cualquier navegación posterior.
 
-   El efecto va en el CONTENEDOR y no en los ~30 spans por carácter: es un solo
-   elemento que animar en vez de treinta capas de compositing con `filter`
-   propio, que en móvil no sale gratis. Los spans siguen existiendo —con la
-   clase neutra .nxr-zp-char, sin estilo— porque el glitch de salida corrompe
-   letras sueltas.
+   El efecto va en el CONTENEDOR: es un solo elemento que animar, y desde V18.69
+   la frase es además un único nodo de texto —el troceado en spans por carácter
+   existía solo para que el glitch de salida corrompiera letras sueltas, y el
+   glitch se retiró—.
 
    La clase la pone el JS al montar, así que sin JS o con reduced motion el
    texto queda plano y visible sin depender de que nadie se la quite. */
@@ -6042,58 +6036,11 @@ input[type="range"].nxr-ms-range::-moz-range-thumb {
     padding: calc(12px * var(--zp-max, 1));
   }
 
-  /* Slice-glitch death of the centre card (mobile only, see the glitch
-     block in ZoomParallax.tsx): the anchor gets .nxr-zp-glitching while the
-     dissolve band runs; 5 full clones of the content (.nxr-zp-glslice) show
-     up, each clipped per frame to a horizontal band and displaced
-     independently — the card and its text visibly CUT into shifted bars
-     (referencia: slice-glitch estilo After Effects). Opacity strobing rides
-     the anchor's inline opacity, which the WebGL glass mirrors. */
-  .nxr-zp-img.nxr-zp-glitching {
-    /* Displaced bars must jut past the card silhouette. */
-    overflow: visible;
-  }
-  .nxr-zp-img.nxr-zp-glitching .nxr-zp-glslice {
-    display: block;
-    position: absolute;
-    inset: 0;
-    pointer-events: none;
-    will-change: transform, opacity, clip-path;
-  }
-  /* V16.20: en móvil la card central es SOLO texto (el mesh de cristal está
-     apagado en ZoomParallaxCardsLayer), así que las bandas del glitch ya no
-     llevan panel oscuro de "cuerpo de card" — son bandas de TEXTO puro
-     desplazadas, más los fantasmas cromáticos de abajo. */
-  .nxr-zp-glslice .nxr-zp-card {
-    background: transparent;
-  }
-  /* Chromatic slices, like the reference frames: two of the five bands are
-     colour-shifted ghosts (anchor children: 1 = base card, 2-6 = slices). */
-  .nxr-zp-glslice:nth-child(3) {
-    filter: saturate(2.6) hue-rotate(-70deg) brightness(1.3);
-  }
-  .nxr-zp-glslice:nth-child(5) {
-    filter: saturate(2.6) hue-rotate(120deg) brightness(1.2);
-  }
-  /* Base (intact) content only — the clones get their own per-frame motion.
-     V16.20 "mejora la animación falla del texto": al translateX se suman un
-     empujón vertical y un cizallado leves, ambos del mismo driver --zpg
-     (deterministas y rebobinables como todo el glitch). */
-  .nxr-zp-layer:nth-child(1) .nxr-zp-img > .nxr-zp-card {
-    transform: translateX(calc(var(--zpg, 0) * 12px)) translateY(calc(var(--zpg, 0) * -5px))
-      skewX(calc(var(--zpg, 0) * 2.5deg));
-  }
-  .nxr-zp-layer:nth-child(1) .nxr-zp-hero-text {
-    text-shadow: calc(var(--zpg, 0) * -10px) 0 rgba(239, 61, 13, 0.9),
-      calc(var(--zpg, 0) * 10px) 0 rgba(168, 240, 74, 0.9);
-  }
-  /* El acento con degradado NO hereda la sombra del glitch (V17.30): su
-     text-fill es transparente (background-clip: text) y el text-shadow
-     pinta ENTRE el fondo clipado y el relleno — con offset 0 en reposo, la
-     capa roja se veía a través de los glifos y el texto salía rojo fijo. */
-  .nxr-zp-layer:nth-child(1) .nxr-zp-hero-text .nxr-gradient-text-lime {
-    text-shadow: none;
-  }
+  /* (Aquí vivía la muerte por FALLO DIGITAL de la card central: cinco clones
+     recortados a bandas y desplazados por frame, con fantasmas cromáticos, un
+     cizallado del contenido y la separación RGB del texto, todo pilotado desde
+     la propiedad --zpg. Se retiró entero en V18.69 a petición; la card central
+     se va ahora con el fundido suave que ya había debajo.) */
   .nxr-zp-layer:nth-child(1) .nxr-zp-img {
     --zp-max: 2.2;
     width: 85vw;
@@ -10886,51 +10833,90 @@ input[type="range"].nxr-ms-range::-moz-range-thumb {
   }
 }
 
+
 /* ===================================================================
-   CRISTAL PINTADO POR EL DOM — solo en móvil (V18.68)
+   CRISTAL PINTADO POR EL DOM — solo en móvil (V18.68, rehecho en V18.69)
    ===================================================================
-   En escritorio, el cristal de las tarjetas es una malla WebGL que vive en el
-   canvas y se recoloca cada frame sobre el rect de la tarjeta. En móvil ya no
-   puede serlo: desde que el scroll táctil volvió a ser del navegador (V18.67,
-   para que su barra inferior se ocultara), el compositor mueve el contenido
-   por delante de lo que ve el hilo principal, así que la malla se dibuja donde
-   la tarjeta ESTABA y el texto se despega de su cristal. No hay ajuste que lo
-   arregle —no existe forma de leer el desplazamiento que el compositor ya ha
-   aplicado—, así que en móvil el cristal se pinta sobre la PROPIA tarjeta: al
-   ser el mismo elemento, es imposible que se separen. El razonamiento completo
-   está en `cristalEnDom` (lib/calidadEscena.ts).
+   En escritorio el cristal de las tarjetas es una malla WebGL que se recoloca
+   cada frame sobre el rect de la tarjeta. En móvil ya no puede serlo: desde que
+   el scroll táctil volvió a ser del navegador (V18.67, para que su barra
+   inferior se ocultara), el compositor mueve el contenido por delante de lo que
+   ve el hilo principal y la malla se dibuja donde la tarjeta ESTABA — el texto
+   se despegaba de su cristal. Aquí el cristal es la propia tarjeta, así que es
+   imposible que se separen. El razonamiento completo está en `cristalEnDom`
+   (lib/calidadEscena.ts).
 
-   SIN `backdrop-filter`, Y ES DELIBERADO. Aquí el desenfoque sería la elección
-   obvia y es justo la mala: detrás de estas tarjetas hay un canvas repintando a
-   ~30fps a pantalla completa, y el compositor rehace cada capa de desenfoque en
-   cada uno de esos repintados. Con una tarjeta se aguanta; con las doce que
-   puede haber en pantalla en ZoomParallax, sale más caro que la malla que
-   acabamos de quitar (es la misma lección de ProcesoReel en V17.99 y del tope
-   de dos divs de GradualBlur). Lo que da la lectura de cristal aquí es el
-   gradiente diagonal más el filo superior iluminado, que no cuestan nada.
+   LA PRIMERA VERSIÓN DE ESTE BLOQUE SE QUEDÓ CORTA ("ya no se ve el liquid
+   glass"): fondo casi opaco al 80% y un reflejo tímido, que es una caja oscura,
+   no un cristal. Lo que hace que una superficie se lea como cristal, con este
+   fondo, NO es el desenfoque —el muro de detrás es casi negro y uniforme, y
+   desenfocar algo uniforme no cambia nada; está anotado en .nxr-card— sino tres
+   cosas que aquí sí se pueden tener enteras:
 
-   El fondo va al 80% y no al 42% de .nxr-card precisamente porque no hay
-   desenfoque que separe la tarjeta del muro: sin él, la opacidad tiene que
-   hacer sola todo el trabajo de legibilidad. Mismo criterio que
-   .nxr-card-solido. */
+     · CUERPO TRANSLÚCIDO, para que el muro se intuya por debajo en vez de
+       quedar tapado.
+     · REFLEJO ESPECULAR en diagonal, más intenso en la esquina superior
+       izquierda: es lo que dice "esto tiene una superficie".
+     · BISELES. El canto superior a blanco casi pleno y el inferior tenue: es el
+       grosor del vidrio, y es lo que más se echaba en falta, porque en la malla
+       de escritorio ese canto biselado es justo su firma.
+
+   Y una sombra de caída, que separa la tarjeta del muro y le da el volumen que
+   en escritorio pone la cúpula.
+
+   POR QUÉ EL DESENFOQUE SOLO EN LOS PANELES. Medido en el navegador: las
+   tarjetas de Servicios tienen CUATRO ancestros transformados por encima (la
+   pista del carrusel, su contenido, el sticky con perspectiva y la propia
+   diapositiva), y cualquiera de ellos convierte al elemento en backdrop root,
+   así que ahí un `backdrop-filter` quedaría declarado sin desenfocar nada. Las
+   de ZoomParallax sí lo tienen limpio, pero arrancan midiendo hasta 175vw ×
+   150vh: desenfocar esa superficie en cada frame, con el canvas repintando
+   detrás, es exactamente la factura que hundió los fps en esa sección. Los
+   paneles son de tamaño normal y hay pocos a la vez, así que ahí sí se paga. */
 @media (max-width: 768px) {
   .nxr-cristal-dom,
   .nxr-srv-inner,
   .nxr-zp-img {
     background:
-      linear-gradient(165deg, rgba(255, 255, 255, 0.075), rgba(255, 255, 255, 0.02) 55%),
-      rgba(12, 16, 24, 0.8);
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14);
+      linear-gradient(
+        148deg,
+        rgba(255, 255, 255, 0.2) 0%,
+        rgba(255, 255, 255, 0.075) 26%,
+        rgba(255, 255, 255, 0.02) 54%,
+        rgba(255, 255, 255, 0.065) 100%
+      ),
+      rgba(10, 15, 24, 0.58);
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.32),
+      inset 1px 0 0 rgba(255, 255, 255, 0.1),
+      inset 0 -1px 0 rgba(255, 255, 255, 0.07),
+      0 14px 38px rgba(0, 0, 0, 0.34);
+  }
+
+  /* Único sitio donde el desenfoque llega al fondo real Y el área es contenida
+     (ver arriba). Con él, el cuerpo puede bajar al 42% de .nxr-card: es el
+     desenfoque quien sostiene la legibilidad, no la opacidad. */
+  .nxr-cristal-dom {
+    background:
+      linear-gradient(
+        148deg,
+        rgba(255, 255, 255, 0.18) 0%,
+        rgba(255, 255, 255, 0.06) 28%,
+        rgba(255, 255, 255, 0.02) 56%,
+        rgba(255, 255, 255, 0.06) 100%
+      ),
+      rgba(12, 17, 26, 0.42);
+    backdrop-filter: blur(16px) saturate(1.35);
   }
 
   /* OJO CON CUÁL ES EL ELEMENTO EN SERVICIOS: el cristal va en `-inner`, no en
      `-card`. La malla se anclaba al rect de `.nxr-srv-card`, pero quien recibe
      la rotación del carrusel cada frame es `.nxr-srv-inner` (ver el gsap.set de
-     push() en Servicios.tsx, que le aplicaba a la cara exactamente el mismo
-     giro que a la malla). Pintando el fondo en la card, la cara giraría sobre
-     un rectángulo plano y quieto; pintándolo en el inner, cuerpo y contenido
-     giran como una sola pieza, que es lo que hacían antes.
+     push() en Servicios.tsx, que aplicaba a la cara exactamente el mismo giro
+     que a la malla). Pintando el fondo en la card, la cara giraría sobre un
+     rectángulo plano y quieto; pintándolo en el inner, cuerpo y contenido giran
+     como una sola pieza, que es lo que hacían antes.
 
      Las tarjetas no llevaban radio propio —lo ponía la geometría de la malla—,
      así que ahora lo declaran ellas. El de ZoomParallax se multiplica por su

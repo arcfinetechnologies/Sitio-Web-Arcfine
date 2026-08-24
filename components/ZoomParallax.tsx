@@ -142,136 +142,49 @@ export default function ZoomParallax() {
     const layers = layerRefs.current.filter(Boolean) as HTMLDivElement[];
     const rmMql = window.matchMedia("(prefers-reduced-motion: reduce)");
 
-    // Centre-card glitch actors, collected once: the intact base content and
-    // the 5 slice clones (see the JSX below).
+    // La card central: su contenido, para poder mostrar y ocultar la frase.
+    // (Aquí se recogían además los cinco clones de banda del glitch de salida y
+    // un hash determinista para su patrón; el glitch se retiró en V18.69.)
     const heroImg = imgRefs.current[0];
     const heroBase = heroImg?.querySelector<HTMLElement>(":scope > .nxr-zp-card") ?? null;
-    const heroSlices = heroImg ? Array.from(heroImg.querySelectorAll<HTMLElement>(".nxr-zp-glslice")) : [];
 
-    // Deterministic pseudo-random (shader-style hash): the glitch pattern is
-    // a pure function of scroll progress, so scrubbing back through the
-    // dissolve replays the exact same frames in reverse — no RAF loops, no
-    // state, nothing to desync from the scrub.
-    const frac = (n: number) => n - Math.floor(n);
-    const hash = (n: number) => frac(Math.sin(n * 127.1) * 43758.5453);
-
-    // ===== Entrada del texto central (V18.37: fundido con desenfoque, en su
-    // posición; antes era un tecleo carácter a carácter que además empezaba
-    // con la sección aún subiendo. V18.66: además entra GRANDE y encoge
-    // mientras se enfoca — la frase se condensa desde el desenfoque en vez de
-    // limitarse a aparecer; el gesto completo vive en la transición CSS de
-    // .nxr-zp-hero-text, ver la nota larga en globals.css). El texto se sigue
-    // troceando UNA vez en spans por carácter —los espacios quedan como nodos
-    // de texto para no
-    // alterar el word-wrap móvil— pero YA NO es para revelarlo: los spans
-    // existen porque el glitch de salida corrompe letras sueltas. La entrada
-    // es temporal (no scrub) y se rebobina si vuelves a subir; la SALIDA
-    // (encogimiento + glitch móvil) no se toca. Reduced motion: no se trocea
-    // nada y el texto queda plano y visible.
+    // ===== Entrada y salida del texto central =====
+    // La frase se materializa desde un desenfoque, grande, y encoge hasta su
+    // tamaño al enfocarse; y se va por el mismo camino, en el mismo sitio. Todo
+    // el gesto vive en la transición CSS de .nxr-zp-hero-text (ver la nota
+    // larga en globals.css); aquí solo se conmuta la clase.
+    //
+    // (V18.69: el texto ya NO se trocea en spans por carácter. Ese troceado
+    // existía únicamente para que el glitch de salida pudiera corromper letras
+    // sueltas, y el glitch se ha retirado. Sin él, la frase es un único nodo de
+    // texto: menos DOM, ningún riesgo de romper el word-wrap en móvil y una
+    // cosa menos que limpiar.)
     const heroText = heroBase?.querySelector<HTMLElement>(".nxr-zp-hero-text") ?? null;
-    const twChars: HTMLElement[] = [];
-    const sliceCharLists: HTMLElement[][] = [];
-    const splitChars = (root: HTMLElement, out: HTMLElement[]) => {
-      const walk = (node: Node) => {
-        if (node.nodeType === Node.TEXT_NODE) {
-          const text = node.textContent ?? "";
-          if (!text.trim()) return;
-          const fragment = document.createDocumentFragment();
-          for (const ch of text) {
-            if (ch === " ") {
-              fragment.appendChild(document.createTextNode(" "));
-            } else {
-              const s = document.createElement("span");
-              // Clase NEUTRA, sin estilo: solo marca el carácter para que el
-              // glitch de salida pueda corromper letras sueltas. Deliberadamente
-              // NO es `nxr-zp-tw`, que lleva `visibility: hidden` y la
-              // conmutan por carácter el hero de la home y el de /seo — aquí
-              // el texto entra con un fundido del contenedor, así que nadie le
-              // quitaría nunca ese hidden y no se vería jamás.
-              s.className = "nxr-zp-char";
-              s.textContent = ch;
-              fragment.appendChild(s);
-              out.push(s);
-            }
-          }
-          (node as ChildNode).replaceWith(fragment);
-        } else if (node.nodeType === Node.ELEMENT_NODE && (node as HTMLElement).tagName !== "BR") {
-          Array.from(node.childNodes).forEach(walk);
-        }
-      };
-      Array.from(root.childNodes).forEach(walk);
-    };
     if (heroText && !rmMql.matches) {
-      splitChars(heroText, twChars);
       // Estado inicial: oculto y desenfocado, listo para el fundido. Se pone
       // desde JS y no en el CSS para que la rama de movimiento reducido —que
       // no llega aquí— muestre el texto plano sin depender de que alguien le
       // quite la clase.
       heroText.classList.add("nxr-zp-oculto");
-      // Los clones de los slices se trocean también para que el glitch
-      // pueda corromper caracteres de forma coherente con la base. Solo
-      // asoman dentro de la banda de glitch, mucho después de la entrada.
-      heroSlices.forEach((sl) => {
-        const st = sl.querySelector<HTMLElement>(".nxr-zp-hero-text");
-        const list: HTMLElement[] = [];
-        if (st) splitChars(st, list);
-        sliceCharLists.push(list);
-      });
     }
     let twStarted = false;
-    let twInit = false;
-    // ENTRADA DEL TEXTO CENTRAL (V18.37). Antes se tecleaba carácter a
-    // carácter y, además, empezaba a escribirse ANTES de que la sección
-    // llegara a su tope: se veía subir mientras se escribía ("sale desde
-    // abajo"). Ahora aparece quieto en su posición final, con un fundido y
-    // desenfoque.
+    // MOSTRAR Y OCULTAR SON LA MISMA TRANSICIÓN AL DERECHO Y AL REVÉS, y eso es
+    // el arreglo de V18.69, no un detalle de estilo.
     //
-    // El efecto va en el CONTENEDOR, no en los ~30 spans: un solo elemento
-    // que animar en vez de treinta capas de compositing con `filter` propio,
-    // que en móvil no sale gratis. Los spans por carácter siguen existiendo
-    // porque el glitch de salida los necesita para corromper letras sueltas;
-    // simplemente ya no se usan para revelar.
-    const mostrarTexto = (instantaneo = false) => {
-      if (!heroText) return;
-      if (instantaneo) heroText.style.transition = "none";
-      heroText.classList.remove("nxr-zp-oculto");
-      if (instantaneo) {
-        void heroText.offsetWidth; // fuerza el reflow antes de devolver la transición
-        heroText.style.transition = "";
-      }
-    };
-    const ocultarTexto = () => {
-      if (!heroText) return;
-      heroText.style.transition = "none";
-      heroText.classList.add("nxr-zp-oculto");
-      void heroText.offsetWidth;
-      heroText.style.transition = "";
-    };
-
-    // Deshace TODO lo que escribe el glitch de la card central: los clones de
-    // banda, la base y los caracteres corrompidos. Extraído porque ahora hace
-    // falta desde dos sitios — al salir de la banda de glitch (uso de
-    // siempre) y al pasar a desktop, donde el bloque del glitch deja de
-    // ejecutarse por completo (ver la rama `else if` en onScroll).
-    const clearHeroGlitch = (img: HTMLElement) => {
-      if (!img.classList.contains("nxr-zp-glitching")) return;
-      img.classList.remove("nxr-zp-glitching");
-      if (heroBase) heroBase.style.opacity = "";
-      for (const sl of heroSlices) {
-        sl.style.opacity = "";
-        sl.style.transform = "";
-        sl.style.clipPath = "";
-      }
-      // Restaura cualquier carácter corrompido por el glitch.
-      for (const list of [twChars, ...sliceCharLists]) {
-        for (const c of list) {
-          if (c.dataset.o !== undefined) {
-            c.textContent = c.dataset.o;
-            delete c.dataset.o;
-          }
-        }
-      }
-    };
+    // Antes `ocultarTexto` desactivaba la transición para quitar la frase de
+    // golpe. Sumado a un umbral de salida distinto al de entrada (ver el gate
+    // en onScroll), el resultado era que al volver hacia arriba la frase seguía
+    // pintada mientras la sección bajaba, así que se la veía DESLIZARSE hacia
+    // abajo con ella — "el texto se sigue viendo subir y bajar desde abajo". Y
+    // aparecía de una forma al bajar y de otra al subir, que es justo lo que no
+    // puede pasar: la web tiene que verse igual en las dos direcciones.
+    //
+    // Ahora las dos funciones se limitan a conmutar la clase y dejar correr la
+    // misma transición de CSS. La frase aparece y desaparece SIEMPRE en el
+    // centro, con el mismo desenfoque y la misma escala, venga el scroll de
+    // donde venga y sea la primera carga o la quinta navegación.
+    const mostrarTexto = () => heroText?.classList.remove("nxr-zp-oculto");
+    const ocultarTexto = () => heroText?.classList.add("nxr-zp-oculto");
 
     // Sticky del reel de Servicios (fade de handoff, ver onScroll):
     // undefined = aún no buscado; null = no existe en esta página.
@@ -368,27 +281,35 @@ export default function ZoomParallax() {
         reelSticky.style.opacity = "";
       }
 
-      // Disparo del fundido del texto central. El umbral es rect.top <= 0:
-      // la sección ya ha llegado a su tope y el sticky está en su posición
-      // definitiva, así que el texto aparece QUIETO, en su sitio. Antes se
-      // disparaba a 0.30·vh (móvil) / 0.50·vh (escritorio), o sea con media
-      // pantalla aún por subir, y por eso se veía salir desde abajo mientras
-      // se escribía.
+      // ===== VENTANA DE VISIBILIDAD DEL TEXTO CENTRAL — simétrica =====
+      // La frase solo puede estar pintada mientras la sección ya ha llegado a
+      // su tope, es decir, mientras el sticky está en su posición definitiva y
+      // la card no se mueve. Ahí aparece quieta, en el centro, y ahí misma se
+      // va.
       //
-      // Dispararlo más tarde no rompe el anti-solape con el reel: su fade
-      // termina a 0.35·vh, muy por delante de 0. Si la página CARGA ya dentro
-      // o pasada la sección (deep-link, teleport), se muestra sin transición
-      // — un fundido sobre estados ya avanzados (p. ej. el glitch) se vería
-      // roto.
-      const twGate = 0;
-      if (twChars.length) {
-        if (!twInit) {
-          twInit = true;
-          if (rect.top <= twGate) {
-            twStarted = true;
-            mostrarTexto(true);
-          }
-        } else if (!twStarted && rect.top <= twGate) {
+      // EL FALLO QUE ESTO ARREGLA (V18.69): el umbral de ENTRADA era 0 pero el
+      // de SALIDA era 0.9·vh. Esa asimetría dejaba la frase pintada durante casi
+      // una pantalla entera de recorrido mientras la sección bajaba al volver
+      // hacia arriba, así que se la veía deslizarse con ella — "el texto se
+      // sigue viendo subir y bajar desde abajo al hacer scroll después de pasar
+      // la sección". Bajando se veía una cosa y subiendo otra.
+      //
+      // Ahora el mismo punto sirve para las dos direcciones, con una banda
+      // mínima de histéresis: sin ella, un scroll que se quede oscilando justo
+      // en el borde encendería y apagaría la frase cada frame. 24px es lo bastante
+      // estrecho como para que la sección esté prácticamente quieta en todo el
+      // recorrido de la transición, y lo bastante ancho como para absorber
+      // cualquier temblor del scroll.
+      //
+      // Y NO HAY CASOS ESPECIALES. Antes había dos ramas que mostraban el texto
+      // SIN transición: la primera lectura y el aterrizaje profundo. Existían
+      // para no fundir sobre un estado ya avanzado del glitch, que ya no
+      // existe. Quitarlas es lo que hace que la sección se comporte igual en la
+      // primera carga que después de navegar, que es justo lo que se pidió.
+      const ENTRA = 0;
+      const SALE = 24;
+      if (heroText) {
+        if (!twStarted && rect.top <= ENTRA) {
           // Cinturón anti-solape (V16.22): en móvil NO se muestra mientras
           // el sticky del reel siga pintado (fade > 0.05 y su caja aún en
           // pantalla) — si algo desincronizara el fade en un dispositivo
@@ -402,11 +323,9 @@ export default function ZoomParallax() {
             reelSticky.getBoundingClientRect().bottom > 0;
           if (!reelPainted) {
             twStarted = true;
-            // Un aterrizaje MUY profundo (media pantalla pasada la sección)
-            // aparece sin transición; en el paso normal, con fundido.
-            mostrarTexto(rect.top < -vh * 0.6);
+            mostrarTexto();
           }
-        } else if (twStarted && rect.top > vh * 0.9) {
+        } else if (twStarted && rect.top > SALE) {
           twStarted = false;
           ocultarTexto();
         }
@@ -507,84 +426,26 @@ export default function ZoomParallax() {
           // gestiona con su propio fade, no con la sección"). La disolución
           // sigue terminando en progress 1, así que ocupa menos progress pero
           // MÁS scroll real, porque la curva ya va aplanada en ese tramo.
-          const t = Math.min(1, Math.max(0, (p - 0.8) / 0.2));
-          const glitching = !rmMql.matches && t > 0 && t < 1;
-          if (!glitching) {
-            // Reduced motion keeps the plain smoothstep fade; outside the
-            // band this also serves as the reset/cleanup path.
-            const fade = 1 - t * t * (3 - 2 * t);
-            img.style.opacity = fade.toFixed(3);
-            img.style.setProperty("--zpg", "0");
-            clearHeroGlitch(img);
-          } else {
-            // Slice-glitch death (After-Effects style): the intact text is
-            // replaced almost immediately by 5 horizontal BANDS of the card
-            // (full clones clipped to stratified stripes), each displaced
-            // and strobed independently in ~26 discrete steps. The whole
-            // card holds near-full opacity while it shreds, then crashes
-            // late — the WebGL glass mirrors that strobe/death.
-            img.classList.add("nxr-zp-glitching");
-            const seed = Math.floor(t * 26);
-            const g = Math.sin(Math.PI * t);
-            const u = Math.min(1, Math.max(0, (t - 0.55) / 0.45));
-            const die = 1 - u * u * (3 - 2 * u);
-            const st = hash(seed * 3 + 11);
-            const strobe = st > 0.68 ? 0.3 + 0.45 * hash(seed + 5) : 1;
-            img.style.opacity = (die * strobe).toFixed(3);
-            if (heroBase) heroBase.style.opacity = Math.max(0, 1 - t * 3.2).toFixed(3);
-            img.style.setProperty("--zpg", ((hash(seed) - 0.5) * 2 * g).toFixed(3));
-            const K = heroSlices.length || 1;
-            heroSlices.forEach((sl, k) => {
-              const h1 = hash(seed * 7 + k * 13);
-              const h2 = hash(seed * 7 + k * 13 + 101);
-              // Bands stratified over the middle 22–80% of the card, where
-              // the text lives — bars that cut THROUGH the letters are what
-              // sells the effect (bands on empty padding read as noise).
-              const top = 22 + ((k + h1 * 0.85) / K) * 58;
-              const hgt = 5 + h2 * 13;
-              const x = (h2 - 0.5) * 2 * (16 + 60 * g);
-              sl.style.clipPath = `inset(${top.toFixed(1)}% 0 ${Math.max(0, 100 - top - hgt).toFixed(1)}% 0)`;
-              sl.style.transform = `translateX(${x.toFixed(1)}px)`;
-              sl.style.opacity = h1 > 0.22 ? "1" : "0";
-            });
-            // Corrupción de caracteres (V16.20 "mejora la animación falla
-            // del texto"): en cada paso discreto unos pocos glifos se
-            // sustituyen por basura — determinista por seed (rebobinable
-            // con el scrub) y coherente entre la base y los clones de los
-            // slices, que comparten índice de carácter.
-            const CORR = "▓▒█<>/\\|#*+=";
-            const corrupt = (list: HTMLElement[]) => {
-              for (let k = 0; k < list.length; k++) {
-                const c = list[k];
-                const hc = hash(seed * 31 + k * 7.3);
-                if (hc > 0.9) {
-                  if (c.dataset.o === undefined) c.dataset.o = c.textContent ?? "";
-                  c.textContent = CORR[Math.floor(hc * 997) % CORR.length];
-                } else if (c.dataset.o !== undefined) {
-                  c.textContent = c.dataset.o;
-                  delete c.dataset.o;
-                }
-              }
-            };
-            corrupt(twChars);
-            sliceCharLists.forEach(corrupt);
-          }
-        } else if (i === 0 && (img.style.opacity || img.classList.contains("nxr-zp-glitching"))) {
-          // DESKTOP: la card central no se disuelve, así que el bloque de
-          // arriba no corre y nada retira lo que dejó escrito. Si el usuario
-          // rota el teléfono o ensancha la ventana con la frase a medio
-          // glitch, sin esto la card se quedaba clavada semitransparente,
-          // con --zpg congelado y con glifos corruptos que ya nadie restaura
-          // (el mismo caso que la rama `else if` del handoff del reel más
-          // arriba). Solo toca estilos INLINE que escribió el propio glitch.
           //
-          // La GUARDA de la condición es deliberada: sin ella esto correría en
-          // cada frame de scroll de desktop ensuciando el CSSOM para nada.
-          // En desktop puro la card 0 nunca tiene opacity inline ni la clase,
-          // así que el coste es una comprobación de cadena vacía y se acabó.
+          // FUERA EL GLITCH (V18.69, a petición). Aquí vivía una "muerte por
+          // fallo digital": la card se troceaba en cinco bandas clonadas con
+          // clip-path, cada una desplazada y estroboscópica en pasos discretos,
+          // con separación RGB del texto y glifos sustituidos por basura. Se ha
+          // ido entero, y con él sus clones del DOM, el troceado del texto en
+          // spans que solo existía para corromper letras y la rama de limpieza
+          // que hacía falta para no dejar la card medio corrompida al cambiar
+          // de tamaño de ventana. Lo que queda es lo que ya había debajo: un
+          // fundido suave con la misma curva de siempre.
+          const t = Math.min(1, Math.max(0, (p - 0.8) / 0.2));
+          const fade = 1 - t * t * (3 - 2 * t);
+          img.style.opacity = fade.toFixed(3);
+        } else if (i === 0 && img.style.opacity) {
+          // DESKTOP: la card central no se disuelve, así que el bloque de
+          // arriba no corre y nada retira la opacidad que dejó escrita. Si se
+          // ensancha la ventana con la frase a medio fundir, sin esto la card
+          // se quedaba clavada semitransparente. La GUARDA es deliberada: sin
+          // ella esto correría en cada frame de scroll de escritorio para nada.
           img.style.opacity = "";
-          img.style.removeProperty("--zpg");
-          clearHeroGlitch(img);
         }
       });
 
@@ -658,17 +519,12 @@ export default function ZoomParallax() {
               }}
             >
               {item.content(t)}
-              {/* Slice layers for the centre card's mobile glitch-death:
-                  full clones of the content, each clipped to a horizontal
-                  band and displaced independently per scroll frame (see the
-                  glitch block in onScroll). display:none everywhere except
-                  while .nxr-zp-glitching is on the anchor (mobile only). */}
-              {i === 0 &&
-                Array.from({ length: 5 }, (_, k) => (
-                  <div className="nxr-zp-glslice" aria-hidden="true" key={`gs${k}`}>
-                    {item.content(t)}
-                  </div>
-                ))}
+              {/* (Aquí colgaban cinco clones completos del contenido de la card
+                  central, recortados a bandas horizontales, que eran el
+                  material del glitch de salida. El efecto se retiró en V18.69 y
+                  los clones con él: eran cinco copias del mismo árbol de nodos
+                  montadas en todas las visitas para un efecto que ya no
+                  existe.) */}
             </div>
           </div>
         ))}
