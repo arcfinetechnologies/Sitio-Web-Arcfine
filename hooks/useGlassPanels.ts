@@ -2,7 +2,6 @@
 
 import { useEffect, type RefObject } from "react";
 import { useGlassPanelsRegistry } from "@/store/useGlassPanelsRegistry";
-import { cristalEnDom } from "@/lib/calidadEscena";
 
 /**
  * Registers every `selector` match inside `rootRef` as a flat volumetric
@@ -31,22 +30,6 @@ export function useGlassPanels(
     const reg = useGlassPanelsRegistry.getState();
     const els = Array.from(root.querySelectorAll<HTMLElement>(selector));
     if (!els.length) return;
-
-    // EN MÓVIL NO SE REGISTRA NINGUNA MALLA: se marca el elemento y el cristal
-    // lo pinta el CSS sobre él mismo (ver .nxr-cristal-dom en globals.css y el
-    // porqué completo en `cristalEnDom`). Una malla anclada a un rect del DOM
-    // no puede ir sincronizada mientras el scroll táctil lo lleve el
-    // navegador, y el síntoma es el texto separándose de su cristal.
-    //
-    // La clase se pone desde JS, y no en el markup de cada sección, por lo
-    // mismo que el registro vivía aquí: quien decide qué elementos son cristal
-    // es esta llamada, así que quien los marque tiene que ser ella. Al
-    // desmontar se retira, para que un cambio de ruta no deje marcado un
-    // elemento que la ruta siguiente reutilice.
-    if (cristalEnDom()) {
-      els.forEach((el) => el.classList.add("nxr-cristal-dom"));
-      return () => els.forEach((el) => el.classList.remove("nxr-cristal-dom"));
-    }
 
     const entries = els.map((el) => {
       const r = el.getBoundingClientRect();
