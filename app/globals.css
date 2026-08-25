@@ -10843,3 +10843,334 @@ input[type="range"].nxr-ms-range::-moz-range-thumb {
    material. El cristal vuelve a ser la malla en todos los dispositivos, y lo
    que lo sostiene pegado es `syncTouch` en SmoothScroll.tsx — ahí está la nota
    larga con el porqué y con lo que cuesta.) */
+
+/* ===================================================================
+   /seo — las tres secciones de la auditoría (V18.71)
+   ===================================================================
+   Cómo funciona el SEO de verdad, las cinco fases previas y la auditoría
+   técnica desplegada. Las tres son de LECTURA: sin pin y sin scrub, porque la
+   página ya tiene el hero pineado y esto es contenido para leer, no para
+   mirar. Y sin cristal volumétrico, por lo mismo que DwhAeo: una malla con
+   transmisión obliga a la escena a capturar todo lo que hay detrás una vez por
+   frame, y aquí no se mueve nada que lo justifique. Acabado .nxr-card. */
+
+#nxr-seo-comofunciona,
+#nxr-seo-proceso,
+#nxr-seo-auditoria {
+  position: relative;
+  padding: var(--section-pad) var(--pad-x);
+  z-index: 1;
+}
+
+.nxr-seo-cf-inner,
+.nxr-seo-pr-inner,
+.nxr-seo-au-inner {
+  max-width: var(--max-w);
+  margin: 0 auto;
+}
+
+.nxr-seo-cf-head,
+.nxr-seo-pr-head,
+.nxr-seo-au-head {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 32px;
+  align-items: end;
+  margin-bottom: 46px;
+}
+
+.nxr-seo-cf-intro,
+.nxr-seo-pr-intro,
+.nxr-seo-au-intro {
+  color: var(--c-salmon);
+  max-width: 520px;
+  line-height: 1.7;
+}
+
+/* ---------- Cómo funciona: las cuatro expectativas ---------- */
+
+.nxr-seo-cf-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.nxr-seo-cf-card {
+  padding: 26px 24px;
+}
+
+.nxr-seo-cf-ico {
+  width: 40px;
+  height: 40px;
+  border-radius: 11px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 16px;
+}
+.nxr-seo-cf-ico svg {
+  width: 20px;
+  height: 20px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.nxr-seo-cf-t {
+  font-family: var(--font-rajdhani), system-ui, sans-serif;
+  font-size: 21px;
+  font-weight: 600;
+  color: var(--c-white);
+  line-height: 1.2;
+  margin-bottom: 10px;
+}
+.nxr-seo-cf-d {
+  font-size: 14.5px;
+  line-height: 1.7;
+  color: rgba(255, 255, 255, 0.78);
+}
+
+/* ---------- Proceso: las seis fases numeradas ---------- */
+
+.nxr-seo-pr-lista {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* Rejilla de dos columnas —número y cuerpo— en vez de un número flotando
+   dentro del texto: así los seis números quedan alineados en una columna y la
+   lista se lee como una secuencia, que es justo lo que hay que entender aquí.
+   `align-items: start` para que el número se quede arriba en las fases de
+   texto largo en lugar de centrarse verticalmente. */
+.nxr-seo-pr-fase {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 26px;
+  align-items: start;
+  padding: 28px 30px;
+}
+
+.nxr-seo-pr-num {
+  font-family: var(--font-rajdhani), system-ui, sans-serif;
+  font-size: 34px;
+  font-weight: 700;
+  line-height: 1;
+  color: rgba(255, 255, 255, 0.22);
+  /* Ancho fijo: los seis números miden lo mismo, así que sin esto igualmente
+     coincidirían — pero con él siguen coincidiendo si algún día hay más de
+     nueve fases y aparece un número de dos cifras distinto. */
+  min-width: 2ch;
+}
+/* La sexta es la que continúa abajo: su número va en color para que se lea
+   como enlace visual con la sección siguiente. */
+.nxr-seo-pr-fase.-sexta .nxr-seo-pr-num {
+  color: var(--c-lime);
+}
+
+.nxr-seo-pr-t {
+  font-family: var(--font-rajdhani), system-ui, sans-serif;
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--c-white);
+  margin-bottom: 8px;
+}
+.nxr-seo-pr-r {
+  font-size: 14.5px;
+  line-height: 1.7;
+  color: rgba(255, 255, 255, 0.78);
+  max-width: 760px;
+}
+
+.nxr-seo-pr-items {
+  list-style: none;
+  margin-top: 16px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 24px;
+}
+.nxr-seo-pr-items li {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-family: var(--font-space-mono), ui-monospace, monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.nxr-seo-pr-tick {
+  flex-shrink: 0;
+  width: 17px;
+  height: 17px;
+  margin-top: 1px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(168, 240, 74, 0.14);
+  color: var(--c-lime);
+}
+.nxr-seo-pr-tick svg {
+  width: 10px;
+  height: 10px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 2.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* ---------- Auditoría: los catorce bloques ---------- */
+
+/* Franja de cifras: lo que un visitante retiene aunque no lea los catorce
+   bloques. Va antes de la rejilla precisamente por eso. */
+.nxr-seo-au-cifras {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 20px;
+  margin-bottom: 26px;
+  font-family: var(--font-space-mono), ui-monospace, monospace;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.6);
+}
+.nxr-seo-au-cifras b {
+  font-family: var(--font-rajdhani), system-ui, sans-serif;
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--c-lime);
+  margin-right: 7px;
+}
+.nxr-seo-au-cifras i {
+  width: 1px;
+  height: 18px;
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.nxr-seo-au-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  align-items: start;
+}
+
+.nxr-seo-au-card {
+  padding: 22px 20px;
+}
+
+.nxr-seo-au-t {
+  font-family: var(--font-rajdhani), system-ui, sans-serif;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--c-white);
+  margin-bottom: 8px;
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 9px;
+}
+/* Marca de "si procede" para SEO local e internacional: no todos los proyectos
+   los llevan, y prometerlos a todo el mundo sería mentir en dos de catorce. */
+.nxr-seo-au-si {
+  font-family: var(--font-space-mono), ui-monospace, monospace;
+  font-size: 10.5px;
+  font-weight: 400;
+  letter-spacing: 0.02em;
+  color: var(--c-salmon);
+  border: 1px solid rgba(255, 157, 125, 0.35);
+  border-radius: 20px;
+  padding: 2px 8px;
+}
+
+.nxr-seo-au-d {
+  font-size: 13.5px;
+  line-height: 1.65;
+  color: rgba(255, 255, 255, 0.76);
+}
+
+/* Las comprobaciones, como inventario. Van en chips y no en lista con viñetas
+   porque son términos cortos, técnicos y repetidos entre bloques: en chips se
+   abarcan de un vistazo en vez de pedir que se lean una a una. */
+.nxr-seo-au-chips {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 14px;
+}
+.nxr-seo-au-chips li {
+  font-family: var(--font-space-mono), ui-monospace, monospace;
+  font-size: 11.5px;
+  line-height: 1.35;
+  color: rgba(255, 255, 255, 0.66);
+  background: rgba(255, 255, 255, 0.055);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 7px;
+  padding: 4px 9px;
+}
+
+.nxr-seo-au-cierre {
+  margin: 34px auto 0;
+  max-width: 780px;
+  text-align: center;
+  color: var(--c-white);
+  font-size: 16px;
+  line-height: 1.7;
+}
+
+/* ---------- Móvil / tablet ---------- */
+@media (max-width: 900px) {
+  .nxr-seo-cf-head,
+  .nxr-seo-pr-head,
+  .nxr-seo-au-head {
+    grid-template-columns: 1fr;
+    gap: 18px;
+    align-items: start;
+    margin-bottom: 34px;
+  }
+  .nxr-seo-cf-grid,
+  .nxr-seo-au-grid {
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+  .nxr-seo-cf-card,
+  .nxr-seo-au-card {
+    padding: 20px 18px;
+  }
+
+  /* La fase pasa a una columna: con el número arriba, el cuerpo recupera todo
+     el ancho, que es lo que necesitan los resúmenes de tres líneas. */
+  .nxr-seo-pr-fase {
+    grid-template-columns: 1fr;
+    gap: 12px;
+    padding: 22px 20px;
+  }
+  .nxr-seo-pr-num {
+    font-size: 26px;
+  }
+  /* Y las comprobaciones a una sola columna: a dos, con 13px de mono, cada
+     celda se queda en dos palabras por línea. */
+  .nxr-seo-pr-items {
+    grid-template-columns: 1fr;
+    gap: 9px;
+  }
+
+  .nxr-seo-au-cifras {
+    gap: 14px;
+  }
+  .nxr-seo-au-cifras b {
+    font-size: 22px;
+  }
+}
+
+/* Tablet en horizontal: la rejilla de la auditoría aguanta dos columnas de
+   sobra, y a una sola quedarían catorce tarjetas en fila india. */
+@media (min-width: 901px) and (max-width: 1180px) {
+  .nxr-seo-au-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
