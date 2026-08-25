@@ -1953,29 +1953,42 @@ p.nxr-hero-mastery-line {
           centro: demasiado arriba.
         · V18.32 revirtió a 120/0 → otra vez demasiado abajo.
        Los dos extremos quedaron descartados.
-        · V18.66 (petición: "que todo el texto e indicador de desliza estén un
-          poco más arriba"): 48px de padding inferior = el bloque ENTERO sube
-          24px. Sube todo junto —titular, párrafo, CTA e indicador—, que es lo
-          que se pidió; no es la vía compensada de abajo, que mueve solo el
-          indicador. 24px es deliberadamente la mitad del salto que en V18.31
-          resultó excesivo (8vh ≈ 30px de subida): el centro exacto se quedaba
-          bajo y el extremo de arriba se pasaba, así que este es el punto medio
-          entre los dos.
+        · V18.66 subió el bloque 24px con 48px de padding inferior ("que todo
+          el texto e indicador de desliza estén un poco más arriba").
+        · V18.72 lo devuelve al centro exacto ("se ve muy arriba, bájala un
+          pelín").
+
+       Y LO IMPORTANTE DE ESE ÚLTIMO VAIVÉN, para que no parezca que se está
+       dando vueltas sobre lo mismo: entre una petición y la otra CAMBIÓ LA
+       REFERENCIA. Hasta V18.68, `--vh-100` era el `innerHeight` vivo, así que
+       en cuanto la barra del navegador se replegaba el escenario crecía hasta
+       la ventana grande y el bloque centrado dentro se iba por debajo del
+       centro visible — de ahí que el centro exacto se percibiera como "bajo" y
+       hubiera que subirlo. Desde V18.68 la variable está congelada en `100svh`,
+       la ventana PEQUEÑA, que es justo la que se ve en reposo: arriba del todo
+       y con la barra desplegada. Ahí el escenario mide lo mismo que la pantalla
+       visible, y su centro ES el centro visible.
+
+       O sea que el centro exacto de hoy NO es el mismo sitio en pantalla que el
+       centro exacto de entonces: aquella corrección de 24px estaba compensando
+       un desplazamiento que ya no existe, y sumada al encuadre nuevo dejaba el
+       bloque visiblemente alto. Con 0/0 vuelve a caer donde debe.
 
        Si alguna vez hay que subir SOLO el indicador sin mover el resto, la vía
        es compensada, no global: recortar el `margin-top` de .nxr-hero-cue en
-       X px y sumar X px a este `padding-bottom`, que devuelve el bloque a
-       donde estaba y deja el indicador X px más arriba. */
+       X px y poner aquí `padding-bottom: X px`, que devuelve el bloque a donde
+       estaba y deja el indicador X px más arriba. */
     padding-top: 0;
-    padding-bottom: 48px;
+    padding-bottom: 0;
   }
 
   /* Los heros de /seo y /automatizaciones reservan a mano el hueco del CTA y
-     el indicador para que su h1 case con el de aquí, así que ese número es un
-     DERIVADO de este padding: si cambia este, cambia aquel. Vive al FINAL del
-     archivo —no aquí— porque tiene que ganar por orden a las declaraciones
-     base de sus dos secciones, que están más abajo. Busca
-     "HEROS DE SERVICIO ALINEADOS CON LA HOME". */
+     el indicador (135px) para que su h1 case con el de aquí. Ese número es un
+     DERIVADO de este padding: mientras esto valga 0, los 135px que ya declaran
+     en sus propias secciones son correctos y no hace falta corregir nada. Si
+     este padding vuelve a moverse, allí hay que sumarle lo mismo — y esa
+     corrección tiene que escribirse al FINAL del archivo, porque comparte
+     especificidad con sus declaraciones base y puesta antes no haría nada. */
 
   /* "Construido con maestría / Entregado con precisión" pinned to the middle
      of the SMALL viewport height: the stage is 100lvh-tracked (--vh-100), so
@@ -10804,34 +10817,13 @@ input[type="range"].nxr-ms-range::-moz-range-thumb {
   }
 }
 
-/* ===================================================================
-   HEROS DE SERVICIO ALINEADOS CON LA HOME — en móvil (V18.66)
-   ===================================================================
-   /seo y /automatizaciones no llevan CTA ni indicador de deslizar debajo del
-   titular, así que sus cabeceras reservan a mano el hueco que esas dos piezas
-   ocupan dentro del bloque centrado de la home (135px medidos). Con eso, el h1
-   cae exactamente a la misma altura en las tres páginas y no se ve ningún
-   salto al navegar entre ellas.
-
-   Ese 135 es un DERIVADO del padding inferior del hero de la home, no un valor
-   independiente: en V18.66 la home subió 24px (padding-bottom 0 → 48), así que
-   aquí toca sumar los mismos 48 → 183. Si vuelve a moverse allí, se mueve
-   aquí; son un solo número escrito en dos sitios.
-
-   POR QUÉ ESTÁ AL FINAL DEL ARCHIVO Y NO JUNTO A LA REGLA DE LA HOME, que es
-   donde se leería mejor: porque `.nxr-seo-head` y `.nxr-auto-head` declaran su
-   propio `padding-bottom: 135px` en sus secciones (líneas ~8180 y ~10450) con
-   la MISMA especificidad que esto, y las media queries no aportan
-   especificidad ninguna. Puesto arriba, la declaración base de más abajo
-   ganaría por orden y este bloque no haría absolutamente nada — que es
-   exactamente lo que le pasó a V18.29 intentando mover el hero de la home
-   desde una media query anterior en el archivo. */
-@media (max-width: 768px) {
-  .nxr-seo-head,
-  .nxr-auto-head {
-    padding-bottom: 183px;
-  }
-}
+/* (Aquí vivió el ajuste que alineaba los heros de /seo y /automatizaciones con
+   el de la home cuando esta subió 24px en V18.66. La home volvió al centro
+   exacto en V18.72, así que el hueco reservado vuelve a ser los 135px que esas
+   dos secciones ya declaran por su cuenta y esta corrección sobra. Si la home
+   vuelve a moverse, hará falta otra vez — y tiene que ir al FINAL del archivo,
+   porque comparte especificidad con esas declaraciones base y puesta antes no
+   haría nada.) */
 
 
 
