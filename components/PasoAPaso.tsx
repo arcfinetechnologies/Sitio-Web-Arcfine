@@ -81,24 +81,35 @@ const UMBRAL = 8;
 const DESCANSO_MS = 130;
 
 /**
- * VELOCIDAD DEL PLANEO. Subida ~1,6× en V18.75 ("que vaya más despacio"):
- * 0,55 → 0,9 ms por píxel, con el suelo de 700 → 1100 ms.
+ * VELOCIDAD DEL PLANEO. Dos peticiones seguidas de "más despacio":
  *
- * Con la geometría actual los cuatro saltos pasan de 898/1005/1153/700 ms a
- * unos 1470/1644/1887/1100. El tope de arriba no llega a tocarse —el salto más
- * largo son 2097 píxeles— y está solo para que, si algún pin crece, la
- * transición no se vuelva eterna.
+ *     V18.74  0,55 ms/px · suelo 700     →  898 / 1005 / 1153 / 700 ms
+ *     V18.75  0,90 ms/px · suelo 1100    → 1470 / 1644 / 1887 / 1100
+ *     V18.76  1,35 ms/px · suelo 1600    → 2205 / 2466 / 2831 / 1600
  *
- * Ir más despacio aquí no es solo cuestión de gusto: las animaciones de estas
- * secciones van con `scrub` (0,5-0,6s de retardo), así que cuanto más dura el
- * planeo, más cerca va la animación de la posición real del scroll y más
- * completa se ve. Al ritmo anterior, el scrub llegaba con parte del recorrido
- * todavía por resolver.
+ * (Los cuatro números de cada fila son los cuatro saltos del tramo con la
+ * geometría actual: 1633, 1827, 2097 y 349 píxeles.)
+ *
+ * Ir despacio aquí no es solo cuestión de gusto: las animaciones de estas
+ * secciones van con `scrub`, o sea con medio segundo largo de retardo respecto
+ * al scroll. Cuanto más dura el planeo, más cerca va la animación de la
+ * posición real y más completa se ve al llegar; con los tiempos originales
+ * terminaba con parte del recorrido todavía por resolver.
+ *
+ * DÓNDE ESTÁ EL LÍMITE, si vuelve a pedirse: a partir de aquí el problema deja
+ * de ser el tiempo y pasa a ser que un segundo golpe de rueda durante el planeo
+ * se ignora. Cuanto más largo el planeo, más probable es darlo — y a estas
+ * duraciones ya es lo normal, no un caso raro. Si hace falta bajar más, lo que
+ * toca antes es encolar ese golpe (un paso pendiente como mucho) para que la
+ * transición no se lea como que la página no responde.
+ *
+ * El tope de arriba no llega a tocarse: el salto más largo son 2097 píxeles.
+ * Está solo para que, si algún pin crece, la transición no se vuelva eterna.
  */
-const DUR_MIN = 1100;
-const DUR_MAX = 2400;
+const DUR_MIN = 1600;
+const DUR_MAX = 3200;
 /** Milisegundos de planeo por píxel recorrido, entre los dos topes. */
-const MS_POR_PX = 0.9;
+const MS_POR_PX = 1.35;
 
 export default function PasoAPaso() {
   const pathname = usePathname();
