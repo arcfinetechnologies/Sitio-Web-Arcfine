@@ -79,10 +79,26 @@ const SRV_REEL_VH = 0.65;
 const UMBRAL = 8;
 /** Quietud tras un paso antes de aceptar el siguiente. */
 const DESCANSO_MS = 130;
-const DUR_MIN = 700;
-const DUR_MAX = 1500;
+
+/**
+ * VELOCIDAD DEL PLANEO. Subida ~1,6× en V18.75 ("que vaya más despacio"):
+ * 0,55 → 0,9 ms por píxel, con el suelo de 700 → 1100 ms.
+ *
+ * Con la geometría actual los cuatro saltos pasan de 898/1005/1153/700 ms a
+ * unos 1470/1644/1887/1100. El tope de arriba no llega a tocarse —el salto más
+ * largo son 2097 píxeles— y está solo para que, si algún pin crece, la
+ * transición no se vuelva eterna.
+ *
+ * Ir más despacio aquí no es solo cuestión de gusto: las animaciones de estas
+ * secciones van con `scrub` (0,5-0,6s de retardo), así que cuanto más dura el
+ * planeo, más cerca va la animación de la posición real del scroll y más
+ * completa se ve. Al ritmo anterior, el scrub llegaba con parte del recorrido
+ * todavía por resolver.
+ */
+const DUR_MIN = 1100;
+const DUR_MAX = 2400;
 /** Milisegundos de planeo por píxel recorrido, entre los dos topes. */
-const MS_POR_PX = 0.55;
+const MS_POR_PX = 0.9;
 
 export default function PasoAPaso() {
   const pathname = usePathname();
