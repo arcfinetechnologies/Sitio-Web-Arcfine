@@ -12,6 +12,7 @@ import RevealInit from "@/components/RevealInit";
 import SmoothScroll from "@/components/SmoothScroll";
 import ScrollProgress from "@/components/ScrollProgress";
 import ScrollSnap from "@/components/ScrollSnap";
+import PasoAPaso from "@/components/PasoAPaso";
 import LoadProgress from "@/components/LoadProgress";
 import CursorDrift from "@/components/CursorDrift";
 import GradualBlur from "@/components/GradualBlur";
@@ -130,6 +131,11 @@ export default async function RootLayout({
             proximidad, así que en mitad de los recorridos largos (hero, Intro,
             el reel de Servicios) no interviene. */}
         <ScrollSnap />
+        {/* El tramo inicial de la home, como diapositivas: un golpe de rueda
+            pasa de la portada a las frases, de ahí a la Intro, a la frase de
+            Servicios y al reel. Solo en escritorio, y se aparta en cuanto
+            empieza el reel, que tiene paginación propia. */}
+        <PasoAPaso />
         <ScrollProgress />
         {/* Cortina de carga: cubre la página desde el primer paint hasta que
             el muro de vídeo está pintando (progreso por hitos reales) — el

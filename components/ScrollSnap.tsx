@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { mandaPasoAPaso } from "@/store/pasoAPaso";
 
 /**
  * Asentamiento del scroll entre secciones.
@@ -58,6 +59,14 @@ export default function ScrollSnap() {
     const asentar = () => {
       const lenis = window.__nxrLenis;
       if (!lenis || deslizando) return;
+
+      // MIENTRAS MANDE EL PASO A PASO, aquí no se toca nada. En ese tramo el
+      // destino ya lo decide él —y no son los bordes de sección, sino puntos a
+      // media animación—, así que un asentamiento por proximidad tiraría del
+      // scroll fuera de la etapa recién alcanzada nada más terminar el planeo.
+      // Se pregunta en los dos sentidos porque `mandaPasoAPaso` depende del
+      // signo: basta con que le toque en cualquiera de los dos para apartarse.
+      if (mandaPasoAPaso(1) || mandaPasoAPaso(-1)) return;
 
       const y = window.scrollY;
       const vh = window.innerHeight;

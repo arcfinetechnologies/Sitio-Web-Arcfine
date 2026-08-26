@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import Lenis from "lenis";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
+import { mandaPasoAPaso } from "@/store/pasoAPaso";
 
 gsap.registerPlugin(ScrollTrigger);
 
@@ -147,6 +148,12 @@ export default function SmoothScroll() {
       virtualScroll: ({ deltaY, event }) => {
         const esTactil = event.type.startsWith("touch");
         if (esTactil && deltaY < 0 && window.scrollY <= 0) return false;
+        // MODO PASO A PASO (tramo inicial de la home en escritorio): mientras
+        // le toque a él, Lenis se aparta del todo. Si no, los dos moverían el
+        // scroll a la vez —Lenis siguiendo la rueda y el paso a paso planeando
+        // hacia su etapa— y el resultado sería un tira y afloja. Quien impide
+        // el scroll nativo en ese caso es el propio PasoAPaso, no esto.
+        if (mandaPasoAPaso(deltaY)) return false;
         return true;
       },
     });
