@@ -348,13 +348,11 @@ export default function Header() {
               <path d="M7 17L17 7M7 7h10v10" />
             </svg>
           </Link>
-          {/* Idioma también dentro del desplegable: en móvil el conmutador de
-              la barra superior queda oculto con el resto del header al
-              scrollear, así que este es el que está siempre alcanzable con el
-              menú abierto. */}
-          <div className="nxr-mm-lang">
-            <LanguageSwitch onSwitch={() => setHamburgerOpen(false)} />
-          </div>
+          {/* (Aquí había un TERCER conmutador de idioma, debajo del CTA. Se
+              puso cuando el de la barra superior se ocultaba con el header al
+              scrollear; hoy sobra y se retiró: el del header ya está siempre
+              a mano, y dos conmutadores en la misma pantalla se leen como dos
+              ajustes distintos que hay que sincronizar.) */}
         </div>
       </div>
 

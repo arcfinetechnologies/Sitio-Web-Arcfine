@@ -115,11 +115,40 @@ export default function SmoothScroll() {
     // Lenis) y su muro de primera llegada clampa cualquier flick fuerte.
     // NO se toca el cap de 1.35·vh de abajo: está co-afinado con el prólogo del
     // reel y bajarlo rompió su entrada dos veces en teléfono real.
+    // TIRAR HACIA ABAJO ARRIBA DEL TODO RECARGA LA PÁGINA (V18.73).
+    // ================================================================
+    // No lo hacía, y por lo mismo que la barra del navegador no se replegaba:
+    // con `syncTouch` Lenis se queda TODOS los gestos táctiles y llama a
+    // `preventDefault()`, así que el navegador nunca llega a ver el
+    // sobredesplazamiento del que nace el "pull to refresh".
+    //
+    // Pero aquí sí hay término medio, y es este `virtualScroll`: Lenis lo
+    // consulta al principio de su manejador y, si devuelve `false`, SALE ANTES
+    // de tocar el evento. Ni preventDefault ni scroll propio: el gesto se lo
+    // queda el navegador. O sea que se puede devolver el control en un caso
+    // muy concreto sin renunciar a la sincronía del cristal en todos los demás.
+    //
+    // El caso es exactamente uno: estar arriba del todo Y tirar hacia abajo. En
+    // esa combinación no hay ningún scroll que hacer —no queda página por
+    // encima—, así que ceder el gesto no le quita nada a Lenis y le devuelve al
+    // navegador el único momento en el que lo necesita. Cualquier otra
+    // situación (tirar hacia arriba, o hacia abajo sin estar en el tope) sigue
+    // siendo suya.
+    //
+    // Solo TÁCTIL: con la rueda del ratón no existe este gesto, y dejar pasar
+    // sus eventos en el tope rompería el suavizado de escritorio sin ganar
+    // nada. `deltaY < 0` es tirar hacia abajo en el convenio de Lenis (deltaY
+    // positivo = avanzar por la página).
     const lenis = new Lenis({
       autoRaf: false,
       syncTouch: true,
       syncTouchLerp: 0.05,
       touchInertiaExponent: 1.7,
+      virtualScroll: ({ deltaY, event }) => {
+        const esTactil = event.type.startsWith("touch");
+        if (esTactil && deltaY < 0 && window.scrollY <= 0) return false;
+        return true;
+      },
     });
     window.__nxrLenis = lenis;
 

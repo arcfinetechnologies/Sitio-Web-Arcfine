@@ -66,9 +66,19 @@ body {
   min-height: 100%;
   overflow-x: hidden;
   -webkit-font-smoothing: antialiased;
-  padding-bottom: calc(100px + env(safe-area-inset-bottom));
   padding-top: env(safe-area-inset-top);
 }
+/* EL BODY YA NO RESERVA HUECO ABAJO (V18.73). Llevaba
+   `padding-bottom: calc(100px + env(safe-area-inset-bottom))` para que el nav
+   flotante no tapara el final del contenido — y eso funcionaba mientras el
+   último elemento de la página fuera una sección cualquiera. Con el pie de
+   página ya montado dejaba de funcionar: el padding del body queda POR DEBAJO
+   del pie, así que al llegar al final aparecía una franja de fondo entre el
+   pie y el borde de la pantalla ("debajo del footer queda un espacio hueco en
+   el que se ve el fondo").
+   La reserva no desaparece, se muda: ahora es acolchado INTERIOR del propio
+   pie (ver .nxr-footer), de modo que el nav flotante sigue sin tapar nada pero
+   el fondo oscuro del pie llega hasta el último píxel de la ventana. */
 
 img,
 video {
@@ -1957,6 +1967,10 @@ p.nxr-hero-mastery-line {
           el texto e indicador de desliza estén un poco más arriba").
         · V18.72 lo devuelve al centro exacto ("se ve muy arriba, bájala un
           pelín").
+        · V18.73 lo baja 24px por debajo del centro ("baja un poquito más"):
+          48px de padding SUPERIOR, la imagen especular del ajuste anterior.
+          Sigue muy lejos de los ~60px de caída que en su día resultaron
+          excesivos, así que hay margen para otro paso si hace falta.
 
        Y LO IMPORTANTE DE ESE ÚLTIMO VAIVÉN, para que no parezca que se está
        dando vueltas sobre lo mismo: entre una petición y la otra CAMBIÓ LA
@@ -1978,7 +1992,7 @@ p.nxr-hero-mastery-line {
        es compensada, no global: recortar el `margin-top` de .nxr-hero-cue en
        X px y poner aquí `padding-bottom: X px`, que devuelve el bloque a donde
        estaba y deja el indicador X px más arriba. */
-    padding-top: 0;
+    padding-top: 48px;
     padding-bottom: 0;
   }
 
@@ -9588,19 +9602,8 @@ input[type="range"].nxr-ms-range::-moz-range-thumb {
   }
 }
 
-/* 2 · Menú desplegable de móvil, al final de la columna y con una línea de
-   separación como el resto de bloques del panel. */
-.nxr-mm-lang {
-  margin-top: 18px;
-  padding-top: 16px;
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
-  display: flex;
-  justify-content: flex-start;
-}
-.nxr-mm-lang .nxr-lang {
-  padding-left: 0;
-  font-size: 13px;
-}
+/* (2 · Aquí estaba el conmutador del desplegable de móvil, retirado en
+   V18.73: sobraba teniendo el de la barra superior siempre a mano.) */
 
 /* 3 (V18.50) · Dentro del DESPLEGABLE de la barra inferior, no en su fila. En
    móvil esa fila solo tiene sitio para Inicio · Menú · Hablemos y el botón la
@@ -9847,12 +9850,18 @@ input[type="range"].nxr-ms-range::-moz-range-thumb {
    pie del resto y de paso evita una capa más de backdrop-filter que el
    compositor tendría que rehacer en cada frame del canvas (que repinta ~30
    veces por segundo en toda la web). */
+/* EL PIE ES LO ÚLTIMO QUE SE VE, sin franja de fondo por debajo. El hueco que
+   necesita el nav flotante para no tapar el copyright se reserva AQUÍ DENTRO
+   —acolchado inferior propio— y no en el body, que es donde estaba y donde
+   caía por debajo del pie dejando ver el fondo (ver la nota en `body`). Con la
+   reserva dentro, el fondo oscuro del pie se extiende hasta el borde de la
+   ventana y el nav flota encima de ese acolchado, que está vacío a propósito. */
 .nxr-footer {
   position: relative;
   z-index: 2;
   background: rgba(8, 10, 14, 0.92);
   border-top: 1px solid rgba(255, 255, 255, 0.1);
-  padding: 64px var(--pad-x) 0;
+  padding: 64px var(--pad-x) calc(76px + env(safe-area-inset-bottom));
 }
 
 .nxr-footer-inner {
@@ -9983,11 +9992,11 @@ input[type="range"].nxr-ms-range::-moz-range-thumb {
   .nxr-footer-bottom {
     flex-direction: column;
     gap: 8px;
-    /* HUECO PARA LA BARRA FLOTANTE. #nxr-nav es position:fixed con z-index 9999
-       y vive a 28px del borde inferior: sin esta reserva se comía la línea de
-       copyright, que es justo lo último de la página y donde el scroll termina.
-       El safe-area cubre además la barra de gestos de los teléfonos sin botón. */
-    padding-bottom: calc(104px + env(safe-area-inset-bottom));
+    /* (El hueco para la barra flotante estaba aquí, solo en móvil. Desde V18.73
+       lo reserva `.nxr-footer` para los dos tamaños —el nav flota abajo también
+       en escritorio— y dejarlo duplicado daba el doble de aire del necesario.
+       Sumando los 28px del padding base de este bloque, la línea de copyright
+       conserva los mismos ~104px de despeje que tenía.) */
   }
 }
 
@@ -10817,13 +10826,34 @@ input[type="range"].nxr-ms-range::-moz-range-thumb {
   }
 }
 
-/* (Aquí vivió el ajuste que alineaba los heros de /seo y /automatizaciones con
-   el de la home cuando esta subió 24px en V18.66. La home volvió al centro
-   exacto en V18.72, así que el hueco reservado vuelve a ser los 135px que esas
-   dos secciones ya declaran por su cuenta y esta corrección sobra. Si la home
-   vuelve a moverse, hará falta otra vez — y tiene que ir al FINAL del archivo,
-   porque comparte especificidad con esas declaraciones base y puesta antes no
-   haría nada.) */
+/* ===================================================================
+   HEROS DE SERVICIO ALINEADOS CON LA HOME — en móvil (V18.73)
+   ===================================================================
+   /seo y /automatizaciones no llevan CTA ni indicador de deslizar debajo del
+   titular, así que sus cabeceras reservan a mano el hueco que esas dos piezas
+   ocupan dentro del bloque centrado de la home (135px medidos). Con eso, el h1
+   cae a la misma altura en las tres páginas y no se ve ningún salto al
+   navegar entre ellas.
+
+   Ese 135 es un DERIVADO de dónde cae el bloque de la home, no un valor
+   independiente. Con la home 24px POR DEBAJO del centro (48px de padding
+   superior), su titular queda 43,5px por encima del centro del contenedor, y
+   para que estas dos cabeceras caigan ahí mismo su reserva tiene que ser el
+   doble: 87px. Si la home vuelve a moverse, este número se recalcula igual.
+
+   POR QUÉ ESTÁ AL FINAL DEL ARCHIVO Y NO JUNTO A LA REGLA DE LA HOME, que es
+   donde se leería mejor: porque  y  declaran su
+   propio  en sus secciones con la MISMA especificidad
+   que esto, y las media queries no aportan especificidad ninguna. Puesto
+   arriba, la declaración base de más abajo ganaría por orden y este bloque no
+   haría absolutamente nada — que es exactamente lo que le pasó a V18.29
+   intentando mover el hero de la home desde una media query anterior. */
+@media (max-width: 768px) {
+  .nxr-seo-head,
+  .nxr-auto-head {
+    padding-bottom: 87px;
+  }
+}
 
 
 
