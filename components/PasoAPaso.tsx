@@ -81,11 +81,12 @@ const UMBRAL = 8;
 const DESCANSO_MS = 130;
 
 /**
- * VELOCIDAD DEL PLANEO. Dos peticiones seguidas de "más despacio":
+ * VELOCIDAD DEL PLANEO. Tres peticiones seguidas de "más despacio":
  *
- *     V18.74  0,55 ms/px · suelo 700     →  898 / 1005 / 1153 / 700 ms
- *     V18.75  0,90 ms/px · suelo 1100    → 1470 / 1644 / 1887 / 1100
- *     V18.76  1,35 ms/px · suelo 1600    → 2205 / 2466 / 2831 / 1600
+ *     V18.74  0,55 ms/px · suelo 700     →  898 / 1005 / 1153 /  700 ms
+ *     V18.75  0,90 ms/px · suelo 1100    → 1470 / 1644 / 1887 / 1100 ms
+ *     V18.76  1,35 ms/px · suelo 1600    → 2205 / 2466 / 2831 / 1600 ms
+ *     V18.77  1,90 ms/px · suelo 2200    → 3103 / 3471 / 3984 / 2200 ms
  *
  * (Los cuatro números de cada fila son los cuatro saltos del tramo con la
  * geometría actual: 1633, 1827, 2097 y 349 píxeles.)
@@ -96,20 +97,19 @@ const DESCANSO_MS = 130;
  * posición real y más completa se ve al llegar; con los tiempos originales
  * terminaba con parte del recorrido todavía por resolver.
  *
- * DÓNDE ESTÁ EL LÍMITE, si vuelve a pedirse: a partir de aquí el problema deja
- * de ser el tiempo y pasa a ser que un segundo golpe de rueda durante el planeo
- * se ignora. Cuanto más largo el planeo, más probable es darlo — y a estas
- * duraciones ya es lo normal, no un caso raro. Si hace falta bajar más, lo que
- * toca antes es encolar ese golpe (un paso pendiente como mucho) para que la
- * transición no se lea como que la página no responde.
+ * A ESTAS DURACIONES YA NO SE PUEDE IGNORAR UN SEGUNDO GOLPE DE RUEDA, y por eso
+ * esta versión trae también la cola (ver `pendiente` más abajo). Con casi cuatro
+ * segundos de transición, volver a empujar a mitad de camino deja de ser un caso
+ * raro y pasa a ser lo normal; sin encolarlo, la página se leería como que no
+ * responde.
  *
  * El tope de arriba no llega a tocarse: el salto más largo son 2097 píxeles.
  * Está solo para que, si algún pin crece, la transición no se vuelva eterna.
  */
-const DUR_MIN = 1600;
-const DUR_MAX = 3200;
+const DUR_MIN = 2200;
+const DUR_MAX = 4200;
 /** Milisegundos de planeo por píxel recorrido, entre los dos topes. */
-const MS_POR_PX = 1.35;
+const MS_POR_PX = 1.9;
 
 export default function PasoAPaso() {
   const pathname = usePathname();
@@ -128,6 +128,22 @@ export default function PasoAPaso() {
     let raf = 0;
     let planeando = false;
     let ultimoPaso = 0;
+    /**
+     * UN paso encolado como mucho, con el sentido del último empujón.
+     *
+     * Existe porque el planeo dura casi cuatro segundos: volver a empujar a
+     * mitad de camino es lo normal, y descartarlo se lee como que la página no
+     * responde. Encolado, la transición encadena con la siguiente sin cortarse
+     * — que es el comportamiento de cualquier pase de diapositivas cuando
+     * pulsas dos veces seguidas.
+     *
+     * UNO Y NO UNA COLA: el último empujón sobreescribe al anterior en vez de
+     * acumularse. Diez golpes seguidos avanzan un paso por planeo mientras se
+     * siga empujando, no diez saltos apilados que la página tendría que
+     * desatascar después. Y como el sentido se sobreescribe, cambiar de idea a
+     * mitad de camino funciona: manda el último gesto.
+     */
+    let pendiente: 0 | 1 | -1 = 0;
 
     /**
      * Las etapas, en píxeles de documento. Se recalculan en CADA consulta y no
@@ -191,6 +207,7 @@ export default function PasoAPaso() {
       if (raf) cancelAnimationFrame(raf);
       raf = 0;
       planeando = false;
+      pendiente = 0;
     };
 
     const planear = (destino: number) => {
@@ -222,6 +239,16 @@ export default function PasoAPaso() {
           planeando = false;
           ultimoPaso = performance.now();
           publicar();
+          // El paso encolado arranca AQUÍ MISMO, sin esperar el descanso: ese
+          // descanso está para no encadenar dos pasos por un solo gesto de
+          // rueda, y aquí el segundo gesto ya existe y es intencionado. Sin
+          // esta salida inmediata se vería una pausa entre transiciones y
+          // volvería la sensación de que la página va por detrás.
+          if (pendiente) {
+            const sentido = pendiente;
+            pendiente = 0;
+            avanzar(sentido);
+          }
         }
       };
       raf = requestAnimationFrame(paso);
@@ -268,9 +295,16 @@ export default function PasoAPaso() {
       // planeo y las dos escrituras se pelearían. Lenis ya se aparta por su
       // lado (ver `virtualScroll` en SmoothScroll).
       ev.preventDefault();
-      if (planeando || Math.abs(dy) < UMBRAL) return;
+      if (Math.abs(dy) < UMBRAL) return;
+      const sentido = dy > 0 ? 1 : -1;
+      // A mitad de planeo el gesto NO se tira: se guarda para encadenar en
+      // cuanto termine. Ver `pendiente`.
+      if (planeando) {
+        pendiente = sentido;
+        return;
+      }
       if (performance.now() - ultimoPaso < DESCANSO_MS) return;
-      avanzar(dy > 0 ? 1 : -1);
+      avanzar(sentido);
     };
 
     const TECLAS_ADELANTE = ["ArrowDown", "PageDown", " ", "Spacebar"];
@@ -283,10 +317,17 @@ export default function PasoAPaso() {
       // del campo, no de la página.
       const a = document.activeElement;
       if (a && (a.tagName === "INPUT" || a.tagName === "TEXTAREA" || (a as HTMLElement).isContentEditable)) return;
-      if (!mandaPasoAPaso(adelante ? 1 : -1)) return;
+      const sentido = adelante ? 1 : -1;
+      if (!mandaPasoAPaso(sentido)) return;
       ev.preventDefault();
-      if (planeando || performance.now() - ultimoPaso < DESCANSO_MS) return;
-      avanzar(adelante ? 1 : -1);
+      // Misma cola que la rueda: mantener pulsada una flecha durante una
+      // transición larga tiene que encadenar, no perderse.
+      if (planeando) {
+        pendiente = sentido;
+        return;
+      }
+      if (performance.now() - ultimoPaso < DESCANSO_MS) return;
+      avanzar(sentido);
     };
 
     // Un refresh de ScrollTrigger mueve los pin-spacer y con ellos las etapas.
