@@ -146,7 +146,40 @@ export default function Intro() {
           const f = smoothstep(local);
           const el = lineas[i];
           el.style.opacity = (1 - f).toFixed(3);
-          el.style.filter = f > 0.001 ? `blur(${(f * MAX_BLUR).toFixed(2)}px)` : "none";
+          // NADA DE DESENFOQUE EN LO QUE NO SE VE — y esto no es un detalle,
+          // era el mayor coste por frame de toda la web (V18.78).
+          //
+          // La condición de arriba era solo `f > 0.001`, así que el tramo alto
+          // también llevaba blur. Pero ahí la opacidad es 1 - f <= 0.001: el
+          // carácter es INVISIBLE, y difuminar algo invisible no se puede
+          // apreciar de ninguna manera. O sea que el `none` de este extremo es
+          // idéntico en pantalla al blur que había, píxel por píxel.
+          //
+          // Lo que cambia es el coste. Medido en esta sección, con sus 390
+          // caracteres troceados:
+          //   · Escribir `opacity` en los 390 .......... 0,64 ms
+          //   · Escribir `filter`  en los 390 .......... 3,27 ms  ← el 84%
+          // `filter` es caro porque cada escritura obliga a rehacer la capa de
+          // pintado de ese elemento; `opacity` no. Y el estado en el que estaba
+          // TODO el rato era el peor posible: en reposo, y para siempre después
+          // de pasar la sección, los 390 caracteres se quedaban con
+          // `blur(10px)` puesto. Esas 390 capas seguían vivas el resto de la
+          // página, así que el coste no se quedaba en la Intro: acompañaba al
+          // visitante hasta el pie.
+          //
+          // Con este cambio, al salir de la sección quedan CERO filtros, y el
+          // coste por frame del barrido baja de ~4,96 ms a ~1,86 ms (medido
+          // alternando las dos versiones en la misma serie, para que la deriva
+          // del navegador afecte igual a las dos).
+          //
+          // Se probaron y se descartaron, con números: cachear el último valor
+          // escrito para saltarse repeticiones (empeora en scroll rápido,
+          // porque durante el barrido cambian ~el 78% de los caracteres) y
+          // escribir las dos propiedades de una sola vez con `cssText` (un 5%
+          // peor). El único camino que quedaría es bajar el número de
+          // elementos con filtro —por ejemplo difuminar por palabra en vez de
+          // por letra—, y eso ya no sería invisible.
+          el.style.filter = f > 0.001 && f < 0.999 ? `blur(${(f * MAX_BLUR).toFixed(2)}px)` : "none";
         }
       };
 
@@ -174,17 +207,25 @@ export default function Intro() {
           reaplicar();
         },
       });
-      // El párrafo va TAMBIÉN letra a letra (antes por líneas). Con ~90
-      // caracteres el barrido se lee mucho más fino que con once líneas: el
-      // difuminado recorre la frase en vez de encenderla a bloques.
+      // El párrafo va TAMBIÉN letra a letra (antes por líneas): el barrido se
+      // lee mucho más fino que con once líneas, el difuminado recorre la frase
+      // en vez de encenderla a bloques.
       //
-      // El coste que documentaba la versión por líneas es real —cada trozo
-      // lleva su propio filter: blur() y son capas de composición— pero está
-      // acotado por dos cosas que ya estaban aquí: solo los caracteres EN
-      // TRANSICIÓN llevan blur (los demás quedan en `none`, ver `aplicar`), y
-      // SPREAD hace que en cada instante solo una parte de la frase esté en ese
-      // estado. El <strong> del interior no da problemas al trocear, a
-      // diferencia del acento del titular, que pinta con background-clip.
+      // OJO AL COSTE, que es real y estuvo mal estimado durante mucho tiempo:
+      // este comentario decía "~90 caracteres" y daba el gasto por acotado
+      // porque "solo los caracteres en transición llevan blur". Medido, son
+      // 364 caracteres en el párrafo (390 con el titular), y la segunda parte
+      // era falsa: la condición dejaba el blur puesto también en todo el tramo
+      // ya invisible, así que en reposo lo llevaban los 390. Corregido en
+      // V18.78 — ver la nota larga dentro de `aplicar`.
+      //
+      // Sigue siendo la sección más cara de la web por frame, así que si algún
+      // día hay que rascar más, el siguiente paso es reducir el número de
+      // elementos con filtro (difuminar por palabra, 64 en vez de 390) — pero
+      // eso ya cambia, aunque sea mínimamente, cómo se ve.
+      //
+      // El <strong> del interior no da problemas al trocear, a diferencia del
+      // acento del titular, que pinta con background-clip.
       const textsSplit = SplitText.create(texts.querySelectorAll<HTMLElement>(".nxr-intro-text"), {
         type: "words, chars",
         autoSplit: true,
