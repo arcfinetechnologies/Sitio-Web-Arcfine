@@ -8,6 +8,7 @@ import { EffectComposer, Bloom, Vignette } from "@react-three/postprocessing";
 import { HalfFloatType } from "three";
 import { escalaCapturaTransmision } from "@/lib/calidadEscena";
 import SceneBackground from "./SceneBackground";
+import CalidadAdaptativa from "./CalidadAdaptativa";
 
 import ServiciosCardsLayer from "./ServiciosCardsLayer";
 import ZoomParallaxCardsLayer from "./ZoomParallaxCardsLayer";
@@ -108,6 +109,23 @@ function ShaderWarmup() {
   return null;
 }
 
+/**
+ * Resolución de la captura de transmisión del cristal, aplicada en vivo.
+ *
+ * Se fijaba una sola vez en `onCreated`, que valía mientras fuese un valor por
+ * dispositivo; desde que el nivel de calidad puede bajarlo a mitad de sesión
+ * (ver `calidad` abajo) hace falta poder reescribirlo. Es una asignación sobre
+ * el renderer, sin coste: three.js reasigna el render target la próxima vez
+ * que dibuja cristal.
+ */
+function CapturaTransmision({ escala }: { escala: number }) {
+  const gl = useThree((s) => s.gl);
+  useEffect(() => {
+    (gl as unknown as { transmissionResolutionScale: number }).transmissionResolutionScale = escala;
+  }, [gl, escala]);
+  return null;
+}
+
 export default function SceneCanvas() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   // Client-side navigation keeps this canvas ALIVE across routes (that's the
@@ -116,6 +134,29 @@ export default function SceneCanvas() {
   const pathname = usePathname();
   const [isMobile] = useState(() => typeof window !== "undefined" && window.innerWidth < 768);
   const [active, setActive] = useState(true);
+  /**
+   * NIVEL DE CALIDAD ADAPTATIVO (V18.79). 0 = todo como estaba.
+   *
+   * La escena pedía un presupuesto de GPU FIJO —~2,6 veces la pantalla de
+   * relleno por frame— igual en una máquina de sobra que en una con gráfica
+   * integrada, y de ahí venía "necesita un hardware potente para ir bien, a
+   * nada que le falta potencia va lentísima". Ahora se mide el tiempo real de
+   * frame y, si el dispositivo no llega, se baja un escalón:
+   *
+   *   0 · Completo. Exactamente lo de antes. Es donde se queda cualquier
+   *       máquina que dé la talla, así que para ellas no cambia nada.
+   *   1 · Sin bloom. Es de largo lo más caro de la escena: su pirámide de
+   *       mipmaps cuesta ~1,5 pantallas por frame, más que el propio muro.
+   *   2 · Además, dpr a 1. El relleno va con el CUADRADO del dpr, así que
+   *       bajar de 1,25 a 1 quita un 36% de píxeles de todo lo que se dibuja.
+   *   3 · Además, captura de transmisión a la mitad. El cristal se ve algo
+   *       más difuso por dentro, pero sigue siendo cristal.
+   *
+   * El orden no es arbitrario: va de lo que más cuesta y menos se echa de
+   * menos, a lo que toca el material de las tarjetas. Y solo baja — ver el
+   * porqué en CalidadAdaptativa.tsx.
+   */
+  const [calidad, setCalidad] = useState(0);
   // Frameloop has THREE regimes (see the `frameloop` prop below):
   //   • tab hidden                        → "never"  (fully idle)
   //   • card section near AND user active → "always" (60fps while it matters)
@@ -276,6 +317,11 @@ export default function SceneCanvas() {
       // canvas mounts lazily on idle (SceneCanvasLazy), so the backdrop
       // FADES onto the dark body instead of popping in mid-load.
       className="nxr-scene-arrive"
+      // Nivel de calidad vigente, publicado en el DOM a propósito: es la única
+      // forma de saber desde fuera —una prueba, o alguien mirando un dispositivo
+      // que va mal— si la escena ha bajado escalones y cuántos. No lo lee nadie
+      // en el código; no tiene coste y ahorra adivinar.
+      data-calidad={calidad}
       style={{
         position: "fixed",
         inset: 0,
@@ -306,7 +352,11 @@ export default function SceneCanvas() {
         // rendimiento en móvil: el relleno va con el CUADRADO del dpr, así que
         // pasar de 1.5 a 1.25 quita un 30% de los píxeles del muro a pantalla
         // completa, por frame, sin tocar ninguna geometría.
-        dpr={isMobile ? [1, 1.5] : [1, 1.25]}
+        //
+        // A partir del nivel 2 de calidad el tope baja a 1 en los dos casos: es
+        // la palanca más grande que queda cuando un dispositivo no llega, justo
+        // porque el relleno va con el cuadrado.
+        dpr={calidad >= 2 ? 1 : isMobile ? [1, 1.5] : [1, 1.25]}
         camera={{ position: [0, 0, CAMERA_DISTANCE], fov: 50, near: 1, far: CAMERA_DISTANCE * 3 }}
         // antialias false on desktop too: every desktop frame goes through
         // EffectComposer, which renders into its own (multisampled) buffers —
@@ -338,6 +388,16 @@ export default function SceneCanvas() {
         <PixelCamera />
         <CanvasBoxTracker el={canvasRef} />
         <ShaderWarmup />
+        {/* Mide el tiempo real de frame y pide bajar un escalón si el
+            dispositivo no llega. Solo mide en "always": en "demand" el canvas
+            se dibuja al ritmo del vídeo a propósito y cualquier medida de ahí
+            diría que todo dispositivo va mal. */}
+        <CalidadAdaptativa
+          activo={active && cardsNear && engaged}
+          nivel={calidad}
+          onBajar={() => setCalidad((n) => Math.min(3, n + 1))}
+        />
+        <CapturaTransmision escala={calidad >= 3 ? escalaCapturaTransmision() * 0.5 : escalaCapturaTransmision()} />
         <ambientLight intensity={0.35} />
         <directionalLight position={[500, 800, 600]} intensity={0.5} color="#ffffff" />
         <SceneEnvironment />
@@ -369,6 +429,7 @@ export default function SceneCanvas() {
           // a dark blurred wall, where aliasing is invisible). Dropping the
           // last 2x unlocked the 60fps budget in the Servicios stretch
           // (p50 33.3ms → 16.7ms measured).
+          //
           // frameBufferType HalfFloat (V18.40, y ahora al servicio del cristal).
           // El composer trabajaba en 8 bits por canal, donde 1.0 es el techo
           // absoluto: cualquier píxel más brillante que el blanco de pantalla
@@ -383,51 +444,69 @@ export default function SceneCanvas() {
           // cristal, que es lo que debe destacar contra ese fondo. Cuesta el
           // doble de ancho de banda en los búferes del composer, que solo
           // existe en escritorio.
-          <EffectComposer multisampling={0} frameBufferType={HalfFloatType}>
-            {/* resolutionScale 0.5 (V17.76): el bloom es el único efecto con
-                cadena de pases PROPIA — Vignette se fusiona en el EffectPass
-                final y sale casi gratis, pero mipmapBlur baja y sube una
-                pirámide de mipmaps, así que su coste va con el área del
-                buffer de partida. A media resolución esa pirámide cuesta la
-                CUARTA parte y el resultado es indistinguible: lo que produce
-                es un halo difuso de varios píxeles de radio, que es
-                exactamente lo que sobrevive a un reescalado. Es el ahorro de
-                GPU más grande disponible sin tocar dpr (y sin tocar dpr, la
-                silueta de las cards de cristal se mantiene igual de limpia). */}
-            {/* intensity 0.35 → 0.6 y radius 0.85. El 1.2 de V18.42 estaba
-                puesto al servicio del emissive azul del cristal, que se retiró
-                en V18.43; sin él ese valor dejaba halos gruesos sobre unos
-                cantos especulares que ya son más brillantes que los
-                originales (ver el clearcoat/reflectivity de VolumetricCard,
-                V18.39). 0.6 es el punto medio coherente: conserva el halo que
-                hace que el cristal parezca iluminado y no vuelve al 0.35 de
-                cuando esos cantos eran mates. El muro NO participa — está
-                deliberadamente oscuro y su brillo ni se acerca al umbral.
-                El radio ancho hace que la luz sangre difusa en vez de quedarse
-                como un contorno pegado, y sale casi gratis: mipmapBlur ya
-                construye la pirámide, el radio solo decide hasta qué nivel se
-                mezcla.
-
-                luminanceThreshold 0.6: por debajo quedan el muro —que está
-                deliberadamente oscuro y ni se acerca— y el cuerpo del
-                cristal; por encima, solo sus cantos. Es lo que hace que
-                florezca el filo y no la superficie entera. (Este umbral
-                estuvo además atado a la nube de puntos, calibrada justo por
-                debajo para no florecer; la nube se eliminó en V18.66 y esa
-                atadura ya no existe, pero el valor sigue siendo el correcto
-                por lo de arriba.) Si algún día hace falta más emisión, se
-                sube el brillo de lo que debe emitir antes que bajar esto:
-                bajarlo mete al muro en la ecuación. */}
-            <Bloom
-              mipmapBlur
-              resolutionScale={0.5}
-              luminanceThreshold={0.6}
-              luminanceSmoothing={0.3}
-              intensity={0.6}
-              radius={0.85}
-            />
-            <Vignette eskil={false} offset={0.25} darkness={0.55} />
-          </EffectComposer>
+          //
+          // ===== BLOOM: EL PRIMER ESCALÓN QUE SE BAJA (V18.79) =====
+          // Se renderizan DOS variantes del composer en vez de meter el Bloom
+          // en una condición dentro de él, y no es por gusto: `EffectComposer`
+          // tipa sus hijos como `Element`, así que un `{cond && <Bloom/>}`
+          // dentro no compila (`false` no es un Element).
+          //
+          // Por qué el bloom es lo primero que se va cuando un dispositivo no
+          // llega: es con diferencia lo más caro de la escena. Su pirámide de
+          // mipmaps rellena ~1,5 veces la pantalla por frame —más que el propio
+          // muro de vídeo, que ya es de pantalla completa— así que quitarlo
+          // devuelve más de la mitad del presupuesto de relleno de una vez. Y
+          // es lo que menos se echa en falta: lo que produce es un halo difuso
+          // alrededor de los cantos del cristal, no una forma ni un contorno.
+          // Vignette se queda en las dos variantes porque se fusiona en el
+          // EffectPass final y sale prácticamente gratis.
+          //
+          // Los parámetros del Bloom, que no se tocan:
+          //
+          // resolutionScale 0.5 (V17.76): mipmapBlur baja y sube una pirámide
+          // de mipmaps, así que su coste va con el área del buffer de partida.
+          // A media resolución esa pirámide cuesta la CUARTA parte y el
+          // resultado es indistinguible: lo que produce es un halo difuso de
+          // varios píxeles de radio, que es exactamente lo que sobrevive a un
+          // reescalado.
+          //
+          // intensity 0.6 y radius 0.85. El 1.2 de V18.42 estaba puesto al
+          // servicio del emissive azul del cristal, que se retiró en V18.43;
+          // sin él ese valor dejaba halos gruesos sobre unos cantos
+          // especulares que ya son más brillantes que los originales (ver el
+          // clearcoat/reflectivity de VolumetricCard, V18.39). 0.6 conserva el
+          // halo que hace que el cristal parezca iluminado sin volver al 0.35
+          // de cuando esos cantos eran mates. El radio ancho hace que la luz
+          // sangre difusa en vez de quedarse como un contorno pegado, y sale
+          // casi gratis: mipmapBlur ya construye la pirámide, el radio solo
+          // decide hasta qué nivel se mezcla.
+          //
+          // luminanceThreshold 0.6: por debajo quedan el muro —deliberadamente
+          // oscuro, ni se acerca— y el cuerpo del cristal; por encima, solo sus
+          // cantos. Es lo que hace que florezca el filo y no la superficie
+          // entera. (Este umbral estuvo además atado a la nube de puntos,
+          // calibrada justo por debajo para no florecer; la nube se eliminó en
+          // V18.66 y esa atadura ya no existe, pero el valor sigue siendo el
+          // correcto por lo de arriba.) Si algún día hace falta más emisión, se
+          // sube el brillo de lo que debe emitir antes que bajar esto: bajarlo
+          // mete al muro en la ecuación.
+          calidad < 1 ? (
+            <EffectComposer multisampling={0} frameBufferType={HalfFloatType}>
+              <Bloom
+                mipmapBlur
+                resolutionScale={0.5}
+                luminanceThreshold={0.6}
+                luminanceSmoothing={0.3}
+                intensity={0.6}
+                radius={0.85}
+              />
+              <Vignette eskil={false} offset={0.25} darkness={0.55} />
+            </EffectComposer>
+          ) : (
+            <EffectComposer multisampling={0} frameBufferType={HalfFloatType}>
+              <Vignette eskil={false} offset={0.25} darkness={0.55} />
+            </EffectComposer>
+          )
         )}
       </Canvas>
       {/* (La viñeta de bordes vive ahora DENTRO del shader del muro — en
