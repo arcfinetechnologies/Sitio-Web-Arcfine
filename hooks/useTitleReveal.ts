@@ -85,7 +85,31 @@ export function useTitleReveal<T extends HTMLElement = HTMLHeadingElement>() {
         scrollTrigger: {
           trigger: el,
           start: "top 88%",
-          toggleActions: "play none none none",
+          // "play none PLAY none" — el tercer hueco es `onEnterBack`, o sea
+          // llegar al título DESDE ABAJO, y estaba en `none` (V18.80).
+          //
+          // Eso dejaba el título con una única forma de aparecer: cruzar su
+          // disparador BAJANDO. Y como el estado de reposo que fija el
+          // `gsap.set` de arriba es `opacity: 0`, cualquier situación en la que
+          // ese cruce no llegue a ocurrir deja el texto invisible para siempre.
+          // Pasa más de lo que parece, y de forma perfectamente normal:
+          //
+          //   · Recargar con la página a media altura. El navegador restaura el
+          //     scroll, los disparadores nacen ya POR DEBAJO de su punto de
+          //     inicio y a partir de ahí solo se sube — así que ninguno de los
+          //     títulos de arriba se revela nunca. Es exactamente el síntoma
+          //     reportado: "al volver arriba algunas secciones de texto no se
+          //     muestran". Y desde V18.73 se puede recargar tirando hacia
+          //     abajo, con lo que recargar a media página es más fácil aún.
+          //   · Entrar por un enlace con ancla, o volver atrás con el
+          //     navegador restaurando la posición.
+          //
+          // Revelar también al entrar desde abajo cierra el agujero, y es un
+          // cambio que solo puede hacer que se VEA MÁS: el tween va de opacidad
+          // 0 a 1 y nada lo devuelve, así que reproducirlo cuando ya está
+          // completo no hace absolutamente nada. Los otros dos huecos siguen en
+          // `none` a propósito: nadie debe poder OCULTAR un título ya revelado.
+          toggleActions: "play none play none",
         },
       });
 

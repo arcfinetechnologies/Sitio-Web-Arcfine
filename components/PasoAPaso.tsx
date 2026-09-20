@@ -97,19 +97,39 @@ const DESCANSO_MS = 130;
  * posición real y más completa se ve al llegar; con los tiempos originales
  * terminaba con parte del recorrido todavía por resolver.
  *
- * A ESTAS DURACIONES YA NO SE PUEDE IGNORAR UN SEGUNDO GOLPE DE RUEDA, y por eso
- * esta versión trae también la cola (ver `pendiente` más abajo). Con casi cuatro
- * segundos de transición, volver a empujar a mitad de camino deja de ser un caso
- * raro y pasa a ser lo normal; sin encolarlo, la página se leería como que no
- * responde.
+ *     V18.80  1,20 ms/px · suelo 1500    → 1960 / 2192 / 2516 / 1500 ms
+ *
+ * (Los cuatro números de cada fila son los cuatro saltos del tramo con la
+ * geometría actual: 1633, 1827, 2097 y 349 píxeles.)
+ *
+ * Ir despacio aquí no es solo cuestión de gusto: las animaciones de estas
+ * secciones van con `scrub`, o sea con medio segundo largo de retardo respecto
+ * al scroll. Cuanto más dura el planeo, más cerca va la animación de la
+ * posición real y más completa se ve al llegar; con los tiempos originales
+ * terminaba con parte del recorrido todavía por resolver.
+ *
+ * V18.80 BAJA DESDE 1,9 ("se siente muy lento") PERO NO ES EL ARREGLO DE FONDO.
+ * El número queda entre el 1,35 que se pidió acelerar y el 1,9 que resultó
+ * lento, así que el ritmo de un solo golpe sigue siendo pausado. Lo que de
+ * verdad quitaba el techo —"tiene que poder ir más rápido"— es que ahora
+ * INSISTIR ACELERA: un segundo golpe comprime el planeo en curso en vez de
+ * limitarse a encolarse (ver `acelerar` dentro de `planear`). Antes, dos golpes
+ * costaban dos transiciones enteras y no había forma de ir más deprisa por
+ * mucho que empujaras; ese techo era el problema, más que la duración.
  *
  * El tope de arriba no llega a tocarse: el salto más largo son 2097 píxeles.
  * Está solo para que, si algún pin crece, la transición no se vuelva eterna.
  */
-const DUR_MIN = 2200;
-const DUR_MAX = 4200;
+const DUR_MIN = 1500;
+const DUR_MAX = 3000;
 /** Milisegundos de planeo por píxel recorrido, entre los dos topes. */
-const MS_POR_PX = 1.9;
+const MS_POR_PX = 1.2;
+/**
+ * En cuánto se termina el planeo en curso cuando el usuario vuelve a empujar.
+ * Corto para que insistir se note al momento, pero no cero: un corte seco se
+ * leería como un salto, y la posición debe seguir siendo continua.
+ */
+const ACELERA_MS = 260;
 
 export default function PasoAPaso() {
   const pathname = usePathname();
@@ -144,6 +164,8 @@ export default function PasoAPaso() {
      * mitad de camino funciona: manda el último gesto.
      */
     let pendiente: 0 | 1 | -1 = 0;
+    /** Comprime el planeo en curso. Lo instala `planear` mientras hay uno. */
+    let acelerarPlaneo: (() => void) | null = null;
 
     /**
      * Las etapas, en píxeles de documento. Se recalculan en CADA consulta y no
@@ -208,6 +230,7 @@ export default function PasoAPaso() {
       raf = 0;
       planeando = false;
       pendiente = 0;
+      acelerarPlaneo = null;
     };
 
     const planear = (destino: number) => {
@@ -220,9 +243,42 @@ export default function PasoAPaso() {
       // La duración va con la DISTANCIA: los saltos de este tramo van de dos a
       // seis pantallas y con un tiempo fijo los cortos se sentirían perezosos y
       // los largos, un tirón. Con topes en los dos extremos.
-      const dur = Math.min(DUR_MAX, Math.max(DUR_MIN, Math.abs(delta) * MS_POR_PX));
-      const t0 = performance.now();
+      //
+      // `dur` y `t0` son MUTABLES porque insistir con la rueda los reescribe
+      // para acelerar el planeo en curso — ver `acelerar`.
+      let dur = Math.min(DUR_MAX, Math.max(DUR_MIN, Math.abs(delta) * MS_POR_PX));
+      let t0 = performance.now();
       planeando = true;
+
+      /**
+       * INSISTIR ACELERA. Es el arreglo de "se siente muy lento, tiene que
+       * poder ir más rápido", y no es lo mismo que bajar la duración.
+       *
+       * Antes, un segundo golpe de rueda a mitad de planeo solo se ENCOLABA:
+       * había que esperar a que la transición terminase entera y solo entonces
+       * arrancaba la siguiente. Con transiciones largas eso significa que dos
+       * golpes cuestan dos transiciones completas, y por rápido que quisieras ir
+       * la página no te dejaba. Ese techo era el problema, más que el número.
+       *
+       * Ahora el golpe extra comprime lo que queda del planeo actual a
+       * `ACELERA_MS` y encadena. Insistir tres veces seguidas cruza el tramo en
+       * un momento; un solo golpe conserva el ritmo pausado de siempre.
+       *
+       * La cuenta preserva la POSICIÓN: se recalculan `dur` y `t0` de forma que
+       * el progreso actual siga siendo el mismo en este instante y solo cambie
+       * lo que queda por delante. Sin eso, acortar la duración haría saltar el
+       * scroll hacia adelante de golpe, que es justo lo que no puede pasar.
+       */
+      const acelerar = () => {
+        const ahora = performance.now();
+        const t = Math.min(1, (ahora - t0) / dur);
+        if (t >= 1) return;
+        const restante = dur - (ahora - t0);
+        if (restante <= ACELERA_MS) return;
+        dur = ACELERA_MS / (1 - t);
+        t0 = ahora - t * dur;
+      };
+      acelerarPlaneo = acelerar;
 
       const paso = () => {
         const t = Math.min(1, (performance.now() - t0) / dur);
@@ -237,6 +293,7 @@ export default function PasoAPaso() {
         } else {
           raf = 0;
           planeando = false;
+          acelerarPlaneo = null;
           ultimoPaso = performance.now();
           publicar();
           // El paso encolado arranca AQUÍ MISMO, sin esperar el descanso: ese
@@ -301,6 +358,7 @@ export default function PasoAPaso() {
       // cuanto termine. Ver `pendiente`.
       if (planeando) {
         pendiente = sentido;
+        acelerarPlaneo?.();
         return;
       }
       if (performance.now() - ultimoPaso < DESCANSO_MS) return;
@@ -324,6 +382,7 @@ export default function PasoAPaso() {
       // transición larga tiene que encadenar, no perderse.
       if (planeando) {
         pendiente = sentido;
+        acelerarPlaneo?.();
         return;
       }
       if (performance.now() - ultimoPaso < DESCANSO_MS) return;

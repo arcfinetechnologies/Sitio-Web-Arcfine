@@ -147,7 +147,7 @@ export default function DwhTechStack() {
         scrollTrigger: {
           trigger: section,
           start: "top 80%",
-          toggleActions: "play none none none",
+          toggleActions: "play none play none",
         },
       });
     },

@@ -220,7 +220,7 @@ export default function CapacidadesWeb() {
           scrollTrigger: {
             trigger: statsEl,
             start: "top 90%",
-            toggleActions: "play none none none",
+            toggleActions: "play none play none",
           },
         });
       });

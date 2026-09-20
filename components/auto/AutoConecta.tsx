@@ -185,7 +185,7 @@ export default function AutoConecta() {
         duration: 0.9,
         ease: "power3.out",
         stagger: 0.12,
-        scrollTrigger: { trigger: section, start: "top 80%", toggleActions: "play none none none" },
+        scrollTrigger: { trigger: section, start: "top 80%", toggleActions: "play none play none" },
       });
     },
     { scope: sectionRef, dependencies: [reducedMotion] }
