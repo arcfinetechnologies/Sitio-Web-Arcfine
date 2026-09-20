@@ -75,10 +75,48 @@ const SRV_REEL_VH = 0.65;
 
 // ---- TACTO ---------------------------------------------------------------
 
-/** Umbral de rueda para dar un gesto por intencionado (filtra micro-deltas). */
-const UMBRAL = 8;
-/** Quietud tras un paso antes de aceptar el siguiente. */
-const DESCANSO_MS = 130;
+/**
+ * UN GESTO = UN PASO. Esto es lo que se estuvo afinando mal tres veces.
+ * =====================================================================
+ * El error de fondo no era la duración: era contar EVENTOS en vez de GESTOS.
+ * Un solo movimiento de rueda —y sobre todo un solo deslizamiento de trackpad—
+ * no emite un evento `wheel`, emite DECENAS: la ráfaga inicial más una cola de
+ * inercia que el navegador sigue entregando después de levantar el dedo.
+ * Tratando cada uno como "quiero avanzar", un toque pequeño se llevaba por
+ * delante todo el tramo ("haciendo poquísimo scroll se pasan todas las
+ * secciones de golpe").
+ *
+ * La solución no es un umbral más alto —la cola también lo cruza— sino
+ * segmentar la ráfaga en gestos, que es exactamente lo que hacen las dos
+ * referencias del sector para este mismo problema:
+ *
+ *  · fullPage.js, que es la librería canónica de "una sección por gesto":
+ *    acumula los deltas recientes en un buffer, lo VACÍA tras un rato de
+ *    silencio, y mantiene un bloqueo duro mientras dura la transición
+ *    (`isAnimating` + `scrollDelay`). Todo lo que llega durante la animación se
+ *    DESCARTA; no se encola ni acelera nada.
+ *  · El módulo `mousewheel` de Swiper, que expone justo estos dos parámetros
+ *    —`thresholdDelta` (cuánto hay que acumular para que cuente) y
+ *    `thresholdTime` (cuánto hay que esperar entre disparos)— precisamente
+ *    para que la cola de inercia de un trackpad no dispare varias veces.
+ *
+ * De ahí salen los tres números de abajo. Y de ahí sale también la decisión de
+ * QUITAR la aceleración por evento que introdujo V18.80: con los gestos bien
+ * segmentados, "ir más rápido" es dar otro toque en cuanto termina la
+ * transición, no que la cola de un mismo toque encadene sola.
+ */
+
+/** Silencio que da una ráfaga por terminada. Es el vaciado de fullPage.js. */
+const GESTO_QUIETO_MS = 150;
+/**
+ * Delta acumulado dentro de una ráfaga para que cuente como intención
+ * (el `thresholdDelta` de Swiper). Un clic de rueda en Chrome ronda los 100-120
+ * px, así que 40 dispara a la primera con el ratón y filtra el roce accidental
+ * del trackpad.
+ */
+const GESTO_DELTA = 40;
+/** Quietud tras terminar un paso antes de aceptar el siguiente. */
+const DESCANSO_MS = 150;
 
 /**
  * VELOCIDAD DEL PLANEO. Tres peticiones seguidas de "más despacio":
@@ -87,17 +125,8 @@ const DESCANSO_MS = 130;
  *     V18.75  0,90 ms/px · suelo 1100    → 1470 / 1644 / 1887 / 1100 ms
  *     V18.76  1,35 ms/px · suelo 1600    → 2205 / 2466 / 2831 / 1600 ms
  *     V18.77  1,90 ms/px · suelo 2200    → 3103 / 3471 / 3984 / 2200 ms
- *
- * (Los cuatro números de cada fila son los cuatro saltos del tramo con la
- * geometría actual: 1633, 1827, 2097 y 349 píxeles.)
- *
- * Ir despacio aquí no es solo cuestión de gusto: las animaciones de estas
- * secciones van con `scrub`, o sea con medio segundo largo de retardo respecto
- * al scroll. Cuanto más dura el planeo, más cerca va la animación de la
- * posición real y más completa se ve al llegar; con los tiempos originales
- * terminaba con parte del recorrido todavía por resolver.
- *
  *     V18.80  1,20 ms/px · suelo 1500    → 1960 / 2192 / 2516 / 1500 ms
+ *     V18.81  1,00 ms/px · suelo 1200    → 1633 / 1827 / 2097 / 1200 ms
  *
  * (Los cuatro números de cada fila son los cuatro saltos del tramo con la
  * geometría actual: 1633, 1827, 2097 y 349 píxeles.)
@@ -105,31 +134,25 @@ const DESCANSO_MS = 130;
  * Ir despacio aquí no es solo cuestión de gusto: las animaciones de estas
  * secciones van con `scrub`, o sea con medio segundo largo de retardo respecto
  * al scroll. Cuanto más dura el planeo, más cerca va la animación de la
- * posición real y más completa se ve al llegar; con los tiempos originales
- * terminaba con parte del recorrido todavía por resolver.
+ * posición real y más completa se ve al llegar.
  *
- * V18.80 BAJA DESDE 1,9 ("se siente muy lento") PERO NO ES EL ARREGLO DE FONDO.
- * El número queda entre el 1,35 que se pidió acelerar y el 1,9 que resultó
- * lento, así que el ritmo de un solo golpe sigue siendo pausado. Lo que de
- * verdad quitaba el techo —"tiene que poder ir más rápido"— es que ahora
- * INSISTIR ACELERA: un segundo golpe comprime el planeo en curso en vez de
- * limitarse a encolarse (ver `acelerar` dentro de `planear`). Antes, dos golpes
- * costaban dos transiciones enteras y no había forma de ir más deprisa por
- * mucho que empujaras; ese techo era el problema, más que la duración.
+ * V18.81 DEJA DE MOVER ESTE NÚMERO A CIEGAS. Las cuatro versiones anteriores lo
+ * subían o bajaban porque el tramo se sentía lento o rápido, pero lo que hacía
+ * que se sintiera mal no era la duración: era que un solo gesto disparaba
+ * varios pasos (ver el bloque de GESTO_* abajo). Con eso arreglado, el ritmo lo
+ * marca "un gesto, una sección" y la duración vuelve a ser lo que dice ser.
+ * Queda en 1,0 ms/px, que es el punto medio del rango que se ha ido acotando a
+ * base de pruebas, y con referencia: fullPage.js usa 700 ms por sección y estos
+ * saltos son de dos a seis pantallas reproduciendo una animación con scrub, así
+ * que el doble largo está justificado.
  *
  * El tope de arriba no llega a tocarse: el salto más largo son 2097 píxeles.
  * Está solo para que, si algún pin crece, la transición no se vuelva eterna.
  */
-const DUR_MIN = 1500;
-const DUR_MAX = 3000;
+const DUR_MIN = 1200;
+const DUR_MAX = 2600;
 /** Milisegundos de planeo por píxel recorrido, entre los dos topes. */
-const MS_POR_PX = 1.2;
-/**
- * En cuánto se termina el planeo en curso cuando el usuario vuelve a empujar.
- * Corto para que insistir se note al momento, pero no cero: un corte seco se
- * leería como un salto, y la posición debe seguir siendo continua.
- */
-const ACELERA_MS = 260;
+const MS_POR_PX = 1.0;
 
 export default function PasoAPaso() {
   const pathname = usePathname();
@@ -149,23 +172,18 @@ export default function PasoAPaso() {
     let planeando = false;
     let ultimoPaso = 0;
     /**
-     * UN paso encolado como mucho, con el sentido del último empujón.
+     * Cierra la ráfaga en curso. Se llama al TERMINAR un planeo, y es lo que
+     * hace que convivan los dos casos que se pisan entre sí:
      *
-     * Existe porque el planeo dura casi cuatro segundos: volver a empujar a
-     * mitad de camino es lo normal, y descartarlo se lee como que la página no
-     * responde. Encolado, la transición encadena con la siguiente sin cortarse
-     * — que es el comportamiento de cualquier pase de diapositivas cuando
-     * pulsas dos veces seguidas.
-     *
-     * UNO Y NO UNA COLA: el último empujón sobreescribe al anterior en vez de
-     * acumularse. Diez golpes seguidos avanzan un paso por planeo mientras se
-     * siga empujando, no diez saltos apilados que la página tendría que
-     * desatascar después. Y como el sentido se sobreescribe, cambiar de idea a
-     * mitad de camino funciona: manda el último gesto.
+     *  · La COLA DE INERCIA de un toque llega durante la transición, se
+     *    descarta, y para cuando esto la borra ya se ha extinguido: no puede
+     *    estrenar un gesto y llevarse la sección siguiente.
+     *  · Un scroll SOSTENIDO (el dedo sin levantar) también se descarta
+     *    durante la transición, pero al reiniciarse aquí vuelve a acumular
+     *    enseguida y avanza otra sección. Es el mismo comportamiento que
+     *    fullPage.js: una sección por ciclo de animación mientras se empuje.
      */
-    let pendiente: 0 | 1 | -1 = 0;
-    /** Comprime el planeo en curso. Lo instala `planear` mientras hay uno. */
-    let acelerarPlaneo: (() => void) | null = null;
+    let reiniciarGesto = () => {};
 
     /**
      * Las etapas, en píxeles de documento. Se recalculan en CADA consulta y no
@@ -229,8 +247,6 @@ export default function PasoAPaso() {
       if (raf) cancelAnimationFrame(raf);
       raf = 0;
       planeando = false;
-      pendiente = 0;
-      acelerarPlaneo = null;
     };
 
     const planear = (destino: number) => {
@@ -243,42 +259,10 @@ export default function PasoAPaso() {
       // La duración va con la DISTANCIA: los saltos de este tramo van de dos a
       // seis pantallas y con un tiempo fijo los cortos se sentirían perezosos y
       // los largos, un tirón. Con topes en los dos extremos.
-      //
-      // `dur` y `t0` son MUTABLES porque insistir con la rueda los reescribe
-      // para acelerar el planeo en curso — ver `acelerar`.
-      let dur = Math.min(DUR_MAX, Math.max(DUR_MIN, Math.abs(delta) * MS_POR_PX));
-      let t0 = performance.now();
+      const dur = Math.min(DUR_MAX, Math.max(DUR_MIN, Math.abs(delta) * MS_POR_PX));
+      const t0 = performance.now();
       planeando = true;
 
-      /**
-       * INSISTIR ACELERA. Es el arreglo de "se siente muy lento, tiene que
-       * poder ir más rápido", y no es lo mismo que bajar la duración.
-       *
-       * Antes, un segundo golpe de rueda a mitad de planeo solo se ENCOLABA:
-       * había que esperar a que la transición terminase entera y solo entonces
-       * arrancaba la siguiente. Con transiciones largas eso significa que dos
-       * golpes cuestan dos transiciones completas, y por rápido que quisieras ir
-       * la página no te dejaba. Ese techo era el problema, más que el número.
-       *
-       * Ahora el golpe extra comprime lo que queda del planeo actual a
-       * `ACELERA_MS` y encadena. Insistir tres veces seguidas cruza el tramo en
-       * un momento; un solo golpe conserva el ritmo pausado de siempre.
-       *
-       * La cuenta preserva la POSICIÓN: se recalculan `dur` y `t0` de forma que
-       * el progreso actual siga siendo el mismo en este instante y solo cambie
-       * lo que queda por delante. Sin eso, acortar la duración haría saltar el
-       * scroll hacia adelante de golpe, que es justo lo que no puede pasar.
-       */
-      const acelerar = () => {
-        const ahora = performance.now();
-        const t = Math.min(1, (ahora - t0) / dur);
-        if (t >= 1) return;
-        const restante = dur - (ahora - t0);
-        if (restante <= ACELERA_MS) return;
-        dur = ACELERA_MS / (1 - t);
-        t0 = ahora - t * dur;
-      };
-      acelerarPlaneo = acelerar;
 
       const paso = () => {
         const t = Math.min(1, (performance.now() - t0) / dur);
@@ -293,19 +277,9 @@ export default function PasoAPaso() {
         } else {
           raf = 0;
           planeando = false;
-          acelerarPlaneo = null;
           ultimoPaso = performance.now();
+          reiniciarGesto();
           publicar();
-          // El paso encolado arranca AQUÍ MISMO, sin esperar el descanso: ese
-          // descanso está para no encadenar dos pasos por un solo gesto de
-          // rueda, y aquí el segundo gesto ya existe y es intencionado. Sin
-          // esta salida inmediata se vería una pausa entre transiciones y
-          // volvería la sensación de que la página va por detrás.
-          if (pendiente) {
-            const sentido = pendiente;
-            pendiente = 0;
-            avanzar(sentido);
-          }
         }
       };
       raf = requestAnimationFrame(paso);
@@ -344,6 +318,52 @@ export default function PasoAPaso() {
       planear(e[destino]);
     };
 
+    /**
+     * SEGMENTACIÓN DE LA RÁFAGA EN GESTOS. Aquí está el arreglo de fondo.
+     *
+     * `acumulado` suma los deltas de la ráfaga en curso y `ultimoEvento` marca
+     * cuándo llegó el último. Si entre dos eventos pasan más de
+     * `GESTO_QUIETO_MS`, la ráfaga anterior se da por terminada y empieza una
+     * nueva — es el vaciado del buffer de fullPage.js. Dentro de una misma
+     * ráfaga solo se avanza UNA vez, por mucho delta que siga llegando: es lo
+     * que impide que la cola de inercia de un trackpad, que puede entregar
+     * decenas de eventos después de levantar el dedo, se lleve por delante
+     * todas las secciones.
+     */
+    let acumulado = 0;
+    let ultimoEvento = 0;
+    let gestoYaUsado = false;
+
+    /**
+     * Decide si este evento es el comienzo de una intención nueva.
+     *
+     * Devuelve el sentido solo UNA vez por ráfaga; el resto de eventos de esa
+     * misma ráfaga devuelven 0 aunque crucen el umbral.
+     */
+    const sentidoDelGesto = (dy: number): 0 | 1 | -1 => {
+      const ahora = performance.now();
+      // Silencio suficiente, o cambio de sentido: ráfaga nueva.
+      if (ahora - ultimoEvento > GESTO_QUIETO_MS || Math.sign(dy) !== Math.sign(acumulado)) {
+        acumulado = 0;
+        gestoYaUsado = false;
+      }
+      ultimoEvento = ahora;
+      acumulado += dy;
+      if (gestoYaUsado) return 0;
+      if (Math.abs(acumulado) < GESTO_DELTA) return 0;
+      // OJO: NO se marca aquí como usado. Se consume en el sitio que de verdad
+      // da el paso, porque entre esto y allí todavía puede rechazarse (bloqueo
+      // del planeo, descanso). Marcarlo aquí quemaba el gesto sin avanzar, y
+      // dejaba un scroll SOSTENIDO clavado para siempre tras la primera
+      // sección: lo detectó la simulación de ráfagas, no se dedujo leyendo.
+      return acumulado > 0 ? 1 : -1;
+    };
+
+    reiniciarGesto = () => {
+      acumulado = 0;
+      gestoYaUsado = false;
+    };
+
     const onWheel = (ev: WheelEvent) => {
       const dy = ev.deltaY;
       if (!mandaPasoAPaso(dy)) return;
@@ -352,16 +372,20 @@ export default function PasoAPaso() {
       // planeo y las dos escrituras se pelearían. Lenis ya se aparta por su
       // lado (ver `virtualScroll` en SmoothScroll).
       ev.preventDefault();
-      if (Math.abs(dy) < UMBRAL) return;
-      const sentido = dy > 0 ? 1 : -1;
-      // A mitad de planeo el gesto NO se tira: se guarda para encadenar en
-      // cuanto termine. Ver `pendiente`.
-      if (planeando) {
-        pendiente = sentido;
-        acelerarPlaneo?.();
-        return;
-      }
+
+      // El delta se contabiliza SIEMPRE, también durante el planeo. Es
+      // deliberado: así la ráfaga que provocó este paso sigue considerándose la
+      // misma mientras dura la transición, y su cola de inercia no puede
+      // estrenar un gesto nuevo al terminar.
+      const sentido = sentidoDelGesto(dy);
+
+      // BLOQUEO DURO MIENTRAS SE PLANEA, como el `isAnimating` de fullPage.js:
+      // lo que llegue durante la transición se DESCARTA. Ni se encola ni
+      // acelera nada — encolar fue lo que convirtió una ráfaga en cuatro pasos.
+      if (planeando) return;
+      if (!sentido) return;
       if (performance.now() - ultimoPaso < DESCANSO_MS) return;
+      gestoYaUsado = true;
       avanzar(sentido);
     };
 
@@ -378,13 +402,10 @@ export default function PasoAPaso() {
       const sentido = adelante ? 1 : -1;
       if (!mandaPasoAPaso(sentido)) return;
       ev.preventDefault();
-      // Misma cola que la rueda: mantener pulsada una flecha durante una
-      // transición larga tiene que encadenar, no perderse.
-      if (planeando) {
-        pendiente = sentido;
-        acelerarPlaneo?.();
-        return;
-      }
+      // Una tecla ya es un gesto discreto, así que no hace falta segmentar
+      // nada; basta con ignorar la repetición automática al mantenerla pulsada
+      // y respetar el mismo bloqueo que la rueda.
+      if (ev.repeat || planeando) return;
       if (performance.now() - ultimoPaso < DESCANSO_MS) return;
       avanzar(sentido);
     };
